@@ -1,0 +1,33 @@
+/* app/static/css/custom.css */
+
+/* Hide number input arrows (spinners) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield; /* Firefox */
+}
+
+/* Alpine.js x-cloak — hide elements until Alpine initializes */
+[x-cloak] { display: none !important; }
+
+/* Fade-in animation for page load transitions */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Tab content fade + slide */
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-tab-fade-in {
+  animation: tabFadeIn 0.3s ease-out;
+}

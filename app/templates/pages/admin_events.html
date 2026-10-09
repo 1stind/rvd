@@ -1,0 +1,736 @@
+{% extends "base.html" %}
+{% block title %}Events Admin - Web Voting Championship{% endblock %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-gray-100">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar"
+    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
+
+    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
+
+    <nav class="space-y-1 text-sm">
+      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
+      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Events</a>
+      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
+      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
+      <a href="/admin/leaderboard" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Leaderboard</a>
+      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
+    </nav>
+
+  </aside>
+
+  <!-- OVERLAY -->
+  <div id="overlay"
+    onclick="toggleSidebar()"
+    class="fixed inset-0 bg-black/30 hidden md:hidden">
+  </div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR -->
+    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
+        <h1 class="text-lg font-semibold text-gray-800">Events</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
+        <span class="text-sm font-medium text-gray-700">Admin</span>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="p-6 space-y-6 overflow-y-auto">
+
+      <!-- LOADING STATE -->
+      <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
+        <p class="text-gray-400 text-sm">Memuat events...</p>
+      </div>
+
+      <!-- EVENTS CONTENT (hidden until loaded) -->
+      <div id="events-content" class="hidden space-y-6">
+
+        <!-- HEADER -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h2 class="text-lg font-semibold text-gray-800">All Events</h2>
+          <button onclick="openCreateEventModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            + Create Event
+          </button>
+        </div>
+
+        <!-- EVENTS TABLE -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500 border-b">
+                  <th class="px-6 py-3">Event Name</th>
+                  <th class="px-6 py-3">Status</th>
+                  <th class="px-6 py-3">Date</th>
+                  <th class="px-6 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="events-body">
+                <tr>
+                  <td colspan="4" class="px-6 py-8 text-center text-gray-400 text-sm">Belum ada event.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ERROR STATE -->
+      <div id="error-state" class="hidden">
+        <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p class="text-red-600 text-sm" id="error-message">Gagal memuat events</p>
+          <button onclick="loadEvents()" class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+</div>
+
+<!-- EVENT MODAL -->
+<div id="event-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeEventModal()"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-gray-800" id="event-modal-title">Create Event</h3>
+        <button onclick="closeEventModal()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+      </div>
+      <form id="event-form" class="p-6 space-y-4">
+        <input type="hidden" id="event-id" value="">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Event Name <span class="text-red-500">*</span></label>
+            <input type="text" id="event-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="School Voting 2026">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea id="event-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Deskripsi event..."></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+            <input type="text" id="event-slug" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="school-voting-2026">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select id="event-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+              <option value="DRAFT">Draft</option>
+              <option value="PUBLISHED">Published</option>
+              <option value="VOTING_OPEN">Voting Open</option>
+              <option value="VOTING_CLOSED">Voting Closed</option>
+              <option value="FINISHED">Finished</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+            <input type="text" id="event-currency" value="IDR" maxlength="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm uppercase">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+            <input type="text" id="event-timezone" value="UTC" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Price per Vote (Rp)</label>
+            <input type="number" id="event-price" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="10000">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Max Vote per Transaction</label>
+            <input type="number" id="event-max-vote" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="100">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Opens At</label>
+            <input type="datetime-local" id="event-opens-at" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Closes At</label>
+            <input type="datetime-local" id="event-closes-at" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium text-gray-700 mb-1">Banner URL</label>
+            <input type="url" id="event-banner" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="https://example.com/banner.jpg">
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" onclick="closeEventModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Save Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRMATION MODAL -->
+<div id="delete-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-2">Delete Event</h3>
+      <p class="text-sm text-gray-600 mb-6">Apakah Anda yakin ingin menghapus event ini? Aksi ini tidak dapat dibatalkan.</p>
+      <div class="flex justify-end gap-3">
+        <button onclick="closeDeleteModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Cancel</button>
+        <button onclick="confirmDelete()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium">Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TEAMS MODAL -->
+<div id="teams-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeTeamsModal()"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-gray-800">Manage Teams</h3>
+        <button onclick="closeTeamsModal()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-6">
+        <!-- Add Team Form -->
+        <form id="team-form" class="space-y-4">
+          <input type="hidden" id="team-id" value="">
+          <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Add Team</h4>
+          <p id="team-error" class="text-sm text-red-600 hidden"></p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Team Name <span class="text-red-500">*</span></label>
+              <input type="text" id="team-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Team A">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">School</label>
+              <input type="text" id="team-school" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="SMA 1">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nomor Undi</label>
+              <input type="number" id="team-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea id="team-description" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Deskripsi tim..."></textarea>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Logo URL</label>
+              <input type="url" id="team-logo-url" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="https://example.com/logo.png">
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" onclick="resetTeamForm()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm hover:bg-gray-50">Reset</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Save Team</button>
+          </div>
+        </form>
+
+        <!-- Teams List -->
+        <div>
+          <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">Teams List</h4>
+          <div id="teams-list" class="space-y-2">
+            <p class="text-sm text-gray-400">Memuat tim...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EVENT DETAIL MODAL -->
+<div id="event-detail-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeEventDetailModal()"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      <div class="px-6 py-4 border-b flex justify-between items-center">
+        <h3 class="text-lg font-semibold text-gray-800">Event Detail</h3>
+        <button onclick="closeEventDetailModal()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+      </div>
+      <div class="p-6 space-y-6">
+        <div id="event-detail-content">
+          <p class="text-sm text-gray-400">Memuat detail event...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const API_BASE = '/api/v1';
+  let currentEventId = null;
+  let isEditMode = false;
+
+  function showId(el) {
+    const e = document.getElementById(el);
+    if (e) e.classList.remove('hidden');
+  }
+
+  function hideId(el) {
+    const e = document.getElementById(el);
+    if (e) e.classList.add('hidden');
+  }
+
+  async function api(path, options = {}) {
+    const token = localStorage.getItem('wvc_admin_token') || '';
+    const headers = Object.assign({
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+    }, options.headers || {});
+
+    const res = await fetch(API_BASE + path, Object.assign({ headers }, options));
+    if (res.status === 401) {
+      localStorage.removeItem('wvc_admin_token');
+      window.location.href = '/admin/login';
+      return null;
+    }
+    if (res.status === 403) {
+      localStorage.removeItem('wvc_admin_token');
+      window.location.href = '/admin/login';
+      return null;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = (data && data.message) ? data.message : ('HTTP ' + res.status);
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  function getStatusBadge(status) {
+    const map = {
+      'DRAFT': 'bg-gray-100 text-gray-600',
+      'PUBLISHED': 'bg-blue-100 text-blue-600',
+      'VOTING_OPEN': 'bg-green-100 text-green-600',
+      'VOTING_CLOSED': 'bg-amber-100 text-amber-600',
+      'FINISHED': 'bg-slate-100 text-slate-600',
+      'ARCHIVED': 'bg-gray-100 text-gray-500',
+    };
+    const cls = map[status] || 'bg-gray-100 text-gray-600';
+    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + status + '</span>';
+  }
+
+  function formatDateTimeLocal(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    const pad = (n) => (n < 10 ? '0' + n : n);
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  async function loadEvents() {
+    hideId('error-state');
+    hideId('events-content');
+    showId('loading-state');
+
+    try {
+      const data = await api('/events');
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Gagal memuat events');
+      }
+
+      const events = data.data || [];
+      const tbody = document.getElementById('events-body');
+
+      if (!events.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-gray-400 text-sm">Belum ada event.</td></tr>';
+      } else {
+        tbody.innerHTML = events.map(function(ev) {
+          var dateText = '';
+          if (ev.closes_at) {
+            var d = new Date(ev.closes_at);
+            dateText = d.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
+          } else if (ev.opens_at) {
+            var d2 = new Date(ev.opens_at);
+            dateText = d2.toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
+          }
+
+          return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
+            '<td class="px-6 py-3 font-medium text-gray-800">' + (ev.name || '') + '</td>' +
+            '<td class="px-6 py-3">' + getStatusBadge(ev.status) + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + dateText + '</td>' +
+             '<td class="px-6 py-3 text-right">' +
+                '<a href="/events?event_id=' + ev.id + '" target="_blank" class="text-blue-600 hover:text-blue-700 text-xs font-medium mr-3">View</a>' +
+                '<button onclick="editEvent(\'' + ev.id + '\')" class="text-gray-600 hover:text-gray-800 text-xs font-medium mr-3">Edit</button>' +
+                '<button onclick="openEventDetailModal(\'' + ev.id + '\')" class="text-gray-600 hover:text-gray-800 text-xs font-medium mr-3">Detail</button>' +
+                '<button onclick="openTeamsModal(\'' + ev.id + '\')" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3">Teams</button>' +
+                '<button onclick="deleteEvent(\'' + ev.id + '\')" class="text-red-600 hover:text-red-700 text-xs font-medium">Delete</button>' +
+             '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      hideId('loading-state');
+      showId('events-content');
+    } catch (e) {
+      hideId('loading-state');
+      document.getElementById('error-message').textContent = 'Gagal memuat events: ' + e.message;
+      showId('error-state');
+    }
+  }
+
+  window.editEvent = function(eventId) {
+    isEditMode = true;
+    currentEventId = eventId;
+    document.getElementById('event-modal-title').textContent = 'Edit Event';
+    document.getElementById('event-id').value = eventId;
+
+    api('/events/' + eventId).then(function(data) {
+      if (!data || !data.success) return;
+      const ev = data.data || {};
+      document.getElementById('event-name').value = ev.name || '';
+      document.getElementById('event-description').value = ev.description || '';
+      document.getElementById('event-slug').value = ev.slug || '';
+      document.getElementById('event-status').value = ev.status || 'DRAFT';
+      document.getElementById('event-currency').value = ev.currency || 'IDR';
+      document.getElementById('event-timezone').value = ev.timezone || 'UTC';
+      document.getElementById('event-price').value = ev.price_per_vote || '';
+      document.getElementById('event-max-vote').value = ev.max_vote_per_transaction || '';
+      document.getElementById('event-banner').value = ev.banner_url || '';
+      if (ev.opens_at) document.getElementById('event-opens-at').value = formatDateTimeLocal(ev.opens_at);
+      else document.getElementById('event-opens-at').value = '';
+      if (ev.closes_at) document.getElementById('event-closes-at').value = formatDateTimeLocal(ev.closes_at);
+      else document.getElementById('event-closes-at').value = '';
+    });
+
+    showId('event-modal');
+  };
+
+  window.openCreateEventModal = function() {
+    isEditMode = false;
+    currentEventId = null;
+    document.getElementById('event-modal-title').textContent = 'Create Event';
+    document.getElementById('event-form').reset();
+    document.getElementById('event-currency').value = 'IDR';
+    document.getElementById('event-timezone').value = 'UTC';
+    document.getElementById('event-id').value = '';
+    showId('event-modal');
+  };
+
+  window.closeEventModal = function() {
+    hideId('event-modal');
+  };
+
+  document.getElementById('event-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const payload = {
+      name: document.getElementById('event-name').value.trim(),
+      description: document.getElementById('event-description').value.trim() || null,
+      slug: document.getElementById('event-slug').value.trim() || null,
+      banner_url: document.getElementById('event-banner').value.trim() || null,
+      timezone: document.getElementById('event-timezone').value.trim() || 'UTC',
+      currency: document.getElementById('event-currency').value.trim().toUpperCase() || 'IDR',
+      price_per_vote: document.getElementById('event-price').value ? parseInt(document.getElementById('event-price').value, 10) : null,
+      max_vote_per_transaction: document.getElementById('event-max-vote').value ? parseInt(document.getElementById('event-max-vote').value, 10) : null,
+      opens_at: document.getElementById('event-opens-at').value || null,
+      closes_at: document.getElementById('event-closes-at').value || null,
+      status: document.getElementById('event-status').value,
+    };
+
+    const method = isEditMode ? 'PUT' : 'POST';
+    const path = isEditMode ? '/admin/events/' + currentEventId : '/admin/events';
+
+    const res = await api(path, {
+      method: method,
+      body: JSON.stringify(payload),
+    });
+
+    if (res && res.success) {
+      closeEventModal();
+      loadEvents();
+    } else {
+      alert(res?.message || 'Gagal menyimpan event');
+    }
+  });
+
+  window.deleteEvent = function(eventId) {
+    currentEventId = eventId;
+    showId('delete-modal');
+  };
+
+  window.closeDeleteModal = function() {
+    hideId('delete-modal');
+    currentEventId = null;
+  };
+
+  window.confirmDelete = async function() {
+    if (!currentEventId) return;
+    const res = await api('/admin/events/' + currentEventId, { method: 'DELETE' });
+    if (res && res.success) {
+      closeDeleteModal();
+      loadEvents();
+    } else {
+      alert(res?.message || 'Gagal menghapus event');
+    }
+  };
+
+  window.toggleSidebar = function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const isOpen = sidebar.classList.contains('translate-x-0');
+
+    if (isOpen) {
+      sidebar.classList.remove('translate-x-0');
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    } else {
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+    }
+  };
+
+  window.openTeamsModal = function(eventId) {
+    currentEventId = eventId;
+    document.getElementById('team-form').reset();
+    document.getElementById('team-id').value = '';
+    document.getElementById('team-sort-order').value = '0';
+    showId('teams-modal');
+    loadTeams(eventId);
+  };
+
+  window.closeTeamsModal = function() {
+    hideId('teams-modal');
+  };
+
+  window.openEventDetailModal = function(eventId) {
+    currentEventId = eventId;
+    showId('event-detail-modal');
+    loadEventDetail(eventId);
+  };
+
+  window.closeEventDetailModal = function() {
+    hideId('event-detail-modal');
+  };
+
+  async function loadEventDetail(eventId) {
+    const container = document.getElementById('event-detail-content');
+    container.innerHTML = '<p class="text-sm text-gray-400">Memuat detail event...</p>';
+
+    try {
+      const [eventData, teamsData, dashboardData] = await Promise.all([
+        api('/events/' + eventId),
+        api('/events/' + eventId + '/teams'),
+        api('/admin/dashboard?event_id=' + eventId),
+      ]);
+
+      if (!eventData || !eventData.success) {
+        throw new Error(eventData?.message || 'Gagal memuat event');
+      }
+
+      const ev = eventData.data || {};
+      const teams = teamsData?.data || [];
+      const stats = dashboardData?.data || {};
+
+      const statusActions = [];
+      if (ev.status === 'DRAFT') {
+        statusActions.push('<button onclick="updateEventStatus(\'' + eventId + '\', \'PUBLISHED\')" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium">Publish</button>');
+      } else if (ev.status === 'VOTING_OPEN') {
+        statusActions.push('<button onclick="updateEventStatus(\'' + eventId + '\', \'VOTING_CLOSED\')" class="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium">Close Voting</button>');
+      } else if (ev.status === 'VOTING_CLOSED') {
+        statusActions.push('<button onclick="updateEventStatus(\'' + eventId + '\', \'VOTING_OPEN\')" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium">Open Voting</button>');
+      }
+
+      container.innerHTML = `
+        <div class="space-y-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Informasi Event</h4>
+              <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                <p><span class="text-gray-500">Nama:</span> <span class="font-medium text-gray-800">${ev.name || ''}</span></p>
+                <p><span class="text-gray-500">Status:</span> ${getStatusBadge(ev.status)}</p>
+                <p><span class="text-gray-500">Harga per Vote:</span> <span class="font-medium text-gray-800">Rp ${(ev.price_per_vote || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Max Vote per Transaksi:</span> <span class="font-medium text-gray-800">${ev.max_vote_per_transaction || '-'}</span></p>
+                <p><span class="text-gray-500">Mata Uang:</span> <span class="font-medium text-gray-800">${ev.currency || 'IDR'}</span></p>
+                <p><span class="text-gray-500">Timezone:</span> <span class="font-medium text-gray-800">${ev.timezone || 'UTC'}</span></p>
+                ${ev.opens_at ? '<p><span class="text-gray-500">Opens At:</span> <span class="font-medium text-gray-800">' + new Date(ev.opens_at).toLocaleString('id-ID') + '</span></p>' : ''}
+                ${ev.closes_at ? '<p><span class="text-gray-500">Closes At:</span> <span class="font-medium text-gray-800">' + new Date(ev.closes_at).toLocaleString('id-ID') + '</span></p>' : ''}
+              </div>
+            </div>
+            <div>
+              <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Statistik</h4>
+              <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                <p><span class="text-gray-500">Total Tim:</span> <span class="font-medium text-gray-800">${teams.length}</span></p>
+                <p><span class="text-gray-500">Total Vote:</span> <span class="font-medium text-gray-800">${(stats.votes || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Total Transaksi:</span> <span class="font-medium text-gray-800">${(stats.payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi Sukses:</span> <span class="font-medium text-green-600">${(stats.successful_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi Pending:</span> <span class="font-medium text-amber-600">${(stats.pending_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi Failed:</span> <span class="font-medium text-red-600">${(stats.failed_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi Expired:</span> <span class="font-medium text-gray-500">${(stats.expired_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Total Nominal Sukses:</span> <span class="font-medium text-gray-800">Rp ${(stats.total_amount || 0).toLocaleString('id-ID')}</span></p>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Ranking Team</h4>
+              <div class="flex gap-2">${statusActions.join('')}</div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="text-left text-gray-500 border-b">
+                    <th class="px-4 py-2">Rank</th>
+                    <th class="px-4 py-2">Team</th>
+                    <th class="px-4 py-2">School</th>
+                    <th class="px-4 py-2 text-right">Votes</th>
+                    <th class="px-4 py-2 text-right">Supporters</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${teams.map(function(t, idx) {
+                    return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
+                      '<td class="px-4 py-2 font-bold text-gray-800">#' + (idx + 1) + '</td>' +
+                      '<td class="px-4 py-2 font-medium text-gray-800">' + (t.name || '') + '</td>' +
+                      '<td class="px-4 py-2 text-gray-500">' + (t.school || '') + '</td>' +
+                      '<td class="px-4 py-2 text-right font-semibold text-navy">' + (t.votes || 0).toLocaleString('id-ID') + '</td>' +
+                      '<td class="px-4 py-2 text-right text-gray-500">' + (t.supporter_count || 0).toLocaleString('id-ID') + '</td>' +
+                    '</tr>';
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+    } catch (e) {
+      container.innerHTML = '<p class="text-sm text-red-600">Gagal memuat detail event: ' + e.message + '</p>';
+    }
+  }
+
+  window.updateEventStatus = async function(eventId, status) {
+    const res = await api('/admin/events/' + eventId, {
+      method: 'PUT',
+      body: JSON.stringify({ status: status }),
+    });
+    if (res && res.success) {
+      loadEventDetail(eventId);
+      loadEvents();
+    } else {
+      alert(res?.message || 'Gagal mengubah status event');
+    }
+  };
+
+  window.resetTeamForm = function() {
+    document.getElementById('team-form').reset();
+    document.getElementById('team-id').value = '';
+    document.getElementById('team-sort-order').value = '0';
+  };
+
+  async function loadTeams(eventId) {
+    const listEl = document.getElementById('teams-list');
+    listEl.innerHTML = '<p class="text-sm text-gray-400">Memuat tim...</p>';
+
+    try {
+      const data = await api('/events/' + eventId + '/teams');
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Gagal memuat tim');
+      }
+
+      const teams = data.data || [];
+      if (!teams.length) {
+        listEl.innerHTML = '<p class="text-sm text-gray-400">Belum ada tim.</p>';
+        return;
+      }
+
+      listEl.innerHTML = teams.map(function(t) {
+        return '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">' +
+          '<div>' +
+            '<p class="text-sm font-medium text-gray-800">' + (t.name || '') + '</p>' +
+            '<p class="text-xs text-gray-500">' + (t.school || '') + (t.sort_order ? ' · Order ' + t.sort_order : '') + '</p>' +
+          '</div>' +
+          '<div class="flex gap-2">' +
+            '<button onclick="editTeam(\'' + eventId + '\', \'' + t.id + '\')" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>' +
+            '<button onclick="deleteTeam(\'' + eventId + '\', \'' + t.id + '\')" class="text-xs text-red-600 hover:text-red-800 font-medium">Delete</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    } catch (e) {
+      listEl.innerHTML = '<p class="text-sm text-red-600">Gagal memuat tim: ' + e.message + '</p>';
+    }
+  }
+
+  window.editTeam = function(eventId, teamId) {
+    api('/events/' + eventId + '/teams').then(function(data) {
+      if (!data || !data.success) return;
+      const teams = data.data || [];
+      const team = teams.find(function(t) { return t.id === teamId; });
+      if (!team) return;
+
+      document.getElementById('team-id').value = team.id;
+      document.getElementById('team-name').value = team.name || '';
+      document.getElementById('team-school').value = team.school || '';
+      document.getElementById('team-description').value = team.description || '';
+      document.getElementById('team-logo-url').value = team.logo_url || '';
+      document.getElementById('team-sort-order').value = team.sort_order || 0;
+    });
+  };
+
+  window.deleteTeam = async function(eventId, teamId) {
+    if (!confirm('Apakah Anda yakin ingin menghapus tim ini?')) return;
+    const res = await api('/admin/events/' + eventId + '/teams/' + teamId, { method: 'DELETE' });
+    if (res && res.success) {
+      loadTeams(eventId);
+    } else {
+      alert(res?.message || 'Gagal menghapus tim');
+    }
+  };
+
+  document.getElementById('team-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    if (!currentEventId) return;
+
+    const teamId = document.getElementById('team-id').value;
+    const payload = {
+      name: document.getElementById('team-name').value.trim(),
+      school: document.getElementById('team-school').value.trim() || null,
+      description: document.getElementById('team-description').value.trim() || null,
+      logo_url: document.getElementById('team-logo-url').value.trim() || null,
+      sort_order: parseInt(document.getElementById('team-sort-order').value, 10) || 0,
+    };
+
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Menyimpan...';
+    const errorEl = document.getElementById('team-error');
+    errorEl.classList.add('hidden');
+
+    try {
+      const method = teamId ? 'PUT' : 'POST';
+      const path = teamId
+        ? '/admin/events/' + currentEventId + '/teams/' + teamId
+        : '/admin/events/' + currentEventId + '/teams';
+
+      const res = await api(path, {
+        method: method,
+        body: JSON.stringify(payload),
+      });
+
+      if (res && res.success) {
+        resetTeamForm();
+        loadTeams(currentEventId);
+      } else {
+        const msg = (res && res.message) ? res.message : 'Gagal menyimpan tim';
+        errorEl.textContent = msg;
+        errorEl.classList.remove('hidden');
+      }
+    } catch (err) {
+      errorEl.textContent = err.message || 'Gagal menyimpan tim';
+      errorEl.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+
+  loadEvents();
+})();
+</script>
+{% endblock %}

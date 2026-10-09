@@ -1,0 +1,629 @@
+﻿{% extends "base.html" %}
+
+{% block title %}Vote - {{ team.name }}{% endblock %}
+
+{% block head %}
+<style>
+  [x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div
+  x-data='votePage(
+    {{ team | tojson }},
+    {{ event | tojson }},
+    "/api/v1/payments",
+    "/api/v1/payments"
+  )'
+  x-init="init()"
+  class="min-h-screen bg-slate-100"
+>
+
+  <!-- HERO -->
+  <section class="bg-slate-900 text-white border-b border-slate-800">
+    <div class="max-w-5xl mx-auto px-6 py-10">
+
+      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+        <a href="/events"
+          class="inline-flex items-center gap-2 text-sm text-slate-300 hover:text-white transition">
+          ← Leaderboard
+        </a>
+
+        <div class="inline-flex items-center gap-2 rounded-full bg-blue-500/20 px-3 py-1 text-xs font-medium text-blue-300"
+             x-show="votingStatus === 'open'" x-cloak>
+
+            <span
+              class="h-2 w-2 rounded-full bg-blue-400 animate-pulse">
+            </span>
+
+            Voting Dibuka
+
+        </div>
+
+        <div class="inline-flex items-center gap-2 rounded-full bg-rose-500/20 px-3 py-1 text-xs font-medium text-rose-300"
+             x-show="votingStatus === 'closed'" x-cloak>
+
+            <span
+              class="h-2 w-2 rounded-full bg-rose-400 animate-pulse">
+            </span>
+
+            Voting Ditutup
+
+        </div>
+
+      </div>
+
+      <div class="mt-8">
+
+        <p class="uppercase tracking-[0.25em] text-xs text-blue-300 font-semibold">
+          Web Voting Championship
+        </p>
+
+        <h1
+          class="mt-3 text-4xl font-bold leading-tight sm:text-5xl"
+          x-text="team?.name || '-'">
+        </h1>
+
+        <p
+          class="mt-3 text-slate-300 max-w-2xl text-sm sm:text-base"
+          x-text="event?.name || 'Dukung tim favoritmu dengan memberikan vote secara online.'">
+        </p>
+
+      </div>
+
+    </div>
+  </section>
+
+
+  <main class="max-w-5xl mx-auto px-6 py-8">
+
+    <div class="grid gap-6 lg:grid-cols-3">
+
+      <!-- LEFT -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- TEAM CARD -->
+        <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
+          <div class="p-6 border-b border-slate-100">
+
+            <div class="flex flex-col gap-5 md:flex-row md:items-start">
+
+              <div
+                class="mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-slate-100 md:mx-0">
+
+                <template x-if="team?.photo_url">
+                  <img
+                    :src="team.photo_url"
+                    alt="Logo tim"
+                    class="h-full w-full object-cover"
+                  >
+                </template>
+
+                <template x-if="!team?.photo_url">
+                  <svg
+                    class="h-10 w-10 text-slate-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                      d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z"
+                    />
+                  </svg>
+                </template>
+
+              </div>
+
+              <div class="flex-1">
+
+                <h2
+                  class="text-3xl font-bold text-slate-800 sm:text-4xl"
+                  x-text="team?.name">
+                </h2>
+
+                <p
+                  class="mt-2 text-slate-500"
+                  x-text="team?.school || team?.origin || '-'">
+                </p>
+
+                <div class="mt-5 flex flex-wrap gap-3">
+
+                  <div class="rounded-2xl bg-slate-100 px-4 py-3">
+                    <p class="text-xs text-slate-500">Vote Saat Ini</p>
+                    <p class="font-bold text-slate-800"
+                      x-text="(team?.total_votes || 0).toLocaleString('id-ID')">
+                    </p>
+                  </div>
+
+                  <div class="rounded-2xl bg-slate-100 px-4 py-3">
+                    <p class="text-xs text-slate-500">Event</p>
+                    <p class="font-bold text-slate-800"
+                      x-text="event?.name || '-'">
+                    </p>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- SUPPORTER -->
+        <div class="rounded-3xl border border-slate-200 bg-white shadow-sm">
+
+          <div class="p-6 border-b border-slate-100">
+
+            <h3 class="text-lg font-semibold text-slate-800">Data Pendukung</h3>
+            <p class="mt-1 text-sm text-slate-500">
+              Isi data di bawah untuk melanjutkan pembayaran.
+            </p>
+
+          </div>
+
+          <div class="space-y-5 p-6">
+
+            <div>
+              <label class="mb-2 block text-sm font-medium text-slate-700">Nama</label>
+              <input
+                x-model="voter.name"
+                type="text"
+                placeholder="Nama lengkap"
+                class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+            </div>
+
+            <div class="grid gap-5 md:grid-cols-2">
+
+              <div>
+                <label class="mb-2 block text-sm font-medium text-slate-700">Email</label>
+                <input
+                  x-model="voter.email"
+                  type="email"
+                  placeholder="email@example.com"
+                  class="w-full rounded-2xl border border-slate-300 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                >
+              </div>
+
+              <div>
+                <label class="mb-2 block text-sm font-medium text-slate-700">WhatsApp</label>
+                <div class="relative">
+                  <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">+62</span>
+                  <input
+                    x-model="voter.phone"
+                    type="text"
+                    placeholder="81234567890"
+                    class="w-full rounded-2xl border border-slate-300 px-14 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  >
+                </div>
+                <p class="mt-2 text-sm text-red-500" x-text="phoneError"></p>
+              </div>
+
+            </div>
+
+            <div>
+              <div class="mb-2 flex items-center justify-between">
+                <label class="text-sm font-medium text-slate-700">Jumlah Vote</label>
+                <span class="text-xs text-slate-500">Minimal 1 vote</span>
+              </div>
+
+              <div class="flex overflow-hidden rounded-2xl border border-slate-300">
+                <button
+                  type="button"
+                  @click="decrementQty()"
+                  class="h-14 w-14 bg-slate-100 text-xl text-slate-700 transition hover:bg-slate-200">
+                  −
+                </button>
+                <input
+                  x-model.number="qty"
+                  @input="calculateTotal()"
+                  type="number"
+                  min="1"
+                  class="flex-1 h-14 border-x border-slate-300 bg-white text-center text-xl font-semibold outline-none"
+                >
+                <button
+                  type="button"
+                  @click="incrementQty()"
+                  class="h-14 w-14 bg-slate-100 text-xl text-slate-700 transition hover:bg-slate-200">
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div x-show="error" x-cloak class="rounded-2xl bg-red-50 border border-red-200 px-4 py-3">
+              <p class="text-sm text-red-600" x-text="error"></p>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- RIGHT -->
+      <aside class="space-y-6">
+
+        <!-- PAYMENT SUMMARY -->
+        <div class="sticky top-6 rounded-3xl border border-slate-200 bg-white shadow-sm">
+
+          <div class="border-b border-slate-100 p-6">
+            <h3 class="text-lg font-semibold text-slate-800">Ringkasan Vote</h3>
+          </div>
+
+          <div class="space-y-5 p-6">
+
+            <div class="flex justify-between text-slate-500">
+              <span>Harga / Vote</span>
+              <span class="font-semibold" x-text="formatCurrency(event?.price_per_vote)"></span>
+            </div>
+
+            <div class="flex justify-between text-slate-500">
+              <span>Jumlah Vote</span>
+              <span class="font-semibold" x-text="qty"></span>
+            </div>
+
+            <div class="flex justify-between text-slate-500">
+              <span>Tim</span>
+              <span class="max-w-[10rem] text-right font-semibold text-slate-800" x-text="team?.name"></span>
+            </div>
+
+            <hr class="border-slate-200" />
+
+            <div class="flex items-center justify-between">
+              <span class="text-lg font-semibold">Total</span>
+              <span class="text-3xl font-bold text-blue-600" x-text="formatCurrency(totalPrice)"></span>
+            </div>
+
+            <p class="text-xs leading-relaxed text-slate-500">
+              Setelah menekan tombol lanjut, ringkasan pembayaran akan ditampilkan sebelum diarahkan ke halaman pembayaran Midtrans.
+            </p>
+
+            <div
+              x-show="votingStatus === 'closed'"
+              x-cloak
+              class="rounded-2xl bg-rose-50 border border-rose-200 px-4 py-3">
+
+              <p class="text-sm text-rose-600">
+                Voting untuk event ini belum dibuka atau sudah berakhir.
+              </p>
+
+            </div>
+
+            <button
+              @click="nextStep()"
+              :disabled="!isVotingOpen"
+              :class="isVotingOpen
+                ? 'w-full rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700'
+                : 'w-full cursor-not-allowed rounded-2xl bg-slate-300 px-4 py-3 text-sm font-semibold text-slate-500'"
+              class="w-full rounded-2xl px-4 py-3 text-sm font-semibold text-white transition">
+
+              <template x-if="isVotingOpen">
+                <span>Lanjut Pembayaran</span>
+              </template>
+              <template x-if="!isVotingOpen">
+                <span>Voting Ditutup</span>
+              </template>
+
+            </button>
+
+          </div>
+
+        </div>
+
+      </aside>
+
+    </div>
+
+  </main>
+
+
+  <!-- PAYMENT CONFIRMATION MODAL -->
+  <div
+    x-show="step === 2"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+    <div
+      @click.outside="step = 1"
+      class="w-full max-w-lg overflow-hidden rounded-3xl bg-white shadow-xl">
+
+      <div class="border-b border-slate-100 p-6">
+        <h2 class="text-xl font-bold text-slate-800">Konfirmasi Pembayaran</h2>
+        <p class="mt-1 text-sm text-slate-500">Pastikan data berikut sudah benar.</p>
+      </div>
+
+      <div class="space-y-4 p-6">
+
+        <div class="flex justify-between text-slate-500">
+          <span>Tim</span>
+          <span class="font-semibold text-slate-800" x-text="team?.name"></span>
+        </div>
+
+        <div class="flex justify-between text-slate-500">
+          <span>Nama</span>
+          <span class="font-semibold text-slate-800" x-text="voter.name"></span>
+        </div>
+
+        <div class="flex justify-between text-slate-500">
+          <span>Email</span>
+          <span class="font-semibold text-slate-800" x-text="voter.email || '-'"</span>
+        </div>
+
+        <div class="flex justify-between text-slate-500">
+          <span>WhatsApp</span>
+          <span class="font-semibold text-slate-800">+62 <span x-text="voter.phone"></span></span>
+        </div>
+
+        <div class="flex justify-between text-slate-500">
+          <span>Jumlah Vote</span>
+          <span class="font-semibold text-slate-800" x-text="qty"></span>
+        </div>
+
+        <hr class="border-slate-200" />
+
+        <div class="flex items-center justify-between">
+          <span class="text-lg font-semibold text-slate-800">Total Bayar</span>
+          <span class="text-3xl font-bold text-blue-600" x-text="formatCurrency(totalPrice)"></span>
+        </div>
+
+      </div>
+
+      <div class="flex gap-3 border-t border-slate-100 p-6">
+        <button
+          @click="step = 1"
+          class="flex-1 rounded-2xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+          Kembali
+        </button>
+        <button
+          @click="createInvoice()"
+          class="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+          Bayar Sekarang
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- QR MODAL -->
+  <div
+    x-show="showQrModal"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+    <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
+
+      <div class="p-8 text-center">
+
+        <div class="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100">
+          <svg
+            class="h-10 w-10 text-blue-600"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z"
+            />
+          </svg>
+        </div>
+
+        <h2 class="text-xl font-bold text-slate-800">Selesaikan Pembayaran</h2>
+        <p class="mt-2 text-sm text-slate-500">
+          Scan QR di bawah untuk menyelesaikan pembayaran.
+        </p>
+
+        <div class="mt-6 flex justify-center">
+          <img
+            x-show="payment?.qris_url"
+            :src="payment?.qris_url"
+            class="h-48 w-48 object-contain"
+          >
+          <div x-show="!payment?.qris_url" class="text-center p-4">
+            <p class="text-sm text-slate-600 mb-2">Scan QRIS di bawah:</p>
+            <pre class="text-xs bg-slate-100 p-3 rounded break-all" x-text="payment?.qr_string || 'QR tidak tersedia'"></pre>
+          </div>
+        </div>
+
+        <p class="mt-4 text-xs text-slate-400">
+          Menunggu pembayaran...
+        </p>
+
+        <div class="mt-6 grid gap-3">
+          <button
+            @click="closeModal()"
+            class="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            Batal
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+   <!-- MOCK PAYMENT SIMULATOR -->
+   <div
+    x-show="showMockSimulator"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+     <div
+       @click.outside="showMockSimulator = false"
+       class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
+
+       <div class="p-8 text-center">
+
+         <div class="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-blue-100">
+           <svg
+             class="h-10 w-10 text-blue-600"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             viewBox="0 0 24 24">
+             <path
+               stroke-linecap="round"
+               stroke-linejoin="round"
+               d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 7s2.239 5 5 5zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z"
+             />
+           </svg>
+         </div>
+
+         <h2 class="text-xl font-bold text-slate-800">Simulasi Pembayaran</h2>
+         <p class="mt-2 text-sm text-slate-500">
+           Mode uji coba: pilih hasil pembayaran yang ingin disimulasikan.
+         </p>
+
+         <div class="my-6 space-y-3 text-left">
+
+           <div class="flex justify-between text-slate-500">
+             <span>Transaction ID</span>
+             <span class="font-mono text-slate-800" x-text="payment?.id || '-'"></span>
+           </div>
+
+           <div class="flex justify-between text-slate-500">
+             <span>Tim</span>
+             <span class="font-semibold text-slate-800" x-text="team?.name"></span>
+           </div>
+
+           <div class="flex justify-between text-slate-500">
+             <span>Jumlah Vote</span>
+             <span class="font-semibold text-slate-800" x-text="payment?.votes || qty"></span>
+           </div>
+
+           <div class="flex justify-between text-slate-500">
+             <span>Total</span>
+             <span class="font-semibold text-slate-800" x-text="formatCurrency(totalPrice)"></span>
+           </div>
+
+           <div class="flex justify-between text-slate-500">
+             <span>Status</span>
+             <span class="font-semibold"
+               x-text="(payment?.status || 'PENDING').toUpperCase()">
+             </span>
+           </div>
+
+         </div>
+
+         <div class="mt-6 grid gap-3">
+
+           <button
+             @click="simulate('success')"
+             class="h-12 w-full rounded-2xl bg-green-600 py-3 text-sm font-semibold text-white transition hover:bg-green-700">
+             Simulasikan Berhasil
+           </button>
+
+           <button
+             @click="simulate('failed')"
+             class="h-12 w-full rounded-2xl bg-rose-600 py-3 text-sm font-semibold text-white transition hover:bg-rose-700">
+             Simulasikan Gagal
+           </button>
+
+           <button
+             @click="simulate('pending')"
+             class="h-12 w-full rounded-2xl bg-amber-500 py-3 text-sm font-semibold text-white transition hover:bg-amber-600">
+             Biarkan Pending
+           </button>
+
+           <button
+             @click="showMockSimulator = false"
+             class="h-12 w-full rounded-2xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+             Batal
+           </button>
+
+         </div>
+
+       </div>
+
+     </div>
+
+   </div>
+
+  <!-- SUCCESS MODAL -->
+  <div
+    x-show="showSuccessModal"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+    <div class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
+
+      <div class="p-8 text-center">
+
+        <div class="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+          <svg
+            class="h-10 w-10 text-green-600"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+
+        <h2 class="text-2xl font-bold text-slate-800">Pembayaran Berhasil</h2>
+        <p class="mt-2 text-slate-500">Terima kasih sudah memberikan dukungan.</p>
+
+        <div class="mt-6 space-y-3 rounded-3xl bg-slate-50 p-5 text-left">
+
+          <div class="flex justify-between text-slate-500">
+            <span>Tim</span>
+            <span class="font-semibold text-slate-800" x-text="team?.name"></span>
+          </div>
+
+          <div class="flex justify-between text-slate-500">
+            <span>Vote Masuk</span>
+            <span class="font-semibold text-blue-600" x-text="payment?.votes || qty"></span>
+          </div>
+
+          <div class="flex justify-between text-slate-500">
+            <span>Total Bayar</span>
+            <span class="font-semibold text-slate-800" x-text="formatCurrency(totalPrice)"></span>
+          </div>
+
+        </div>
+
+        <div class="grid gap-3 mt-8">
+          <a
+            href="/events"
+            class="inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700">
+            Lihat Leaderboard
+          </a>
+          <a
+            href="/events"
+            class="inline-flex h-12 items-center justify-center rounded-2xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            Kembali ke Event
+          </a>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/vote.js"></script>
+{% endblock %}

@@ -1,0 +1,596 @@
+{% extends "base.html" %}
+{% block title %}{{ event.name if event else "Event" }} — Web Voting Championship{% endblock %}
+
+{% block content %}
+
+<div x-data='eventsPage({{ event | tojson }}, {{ all_events | tojson }})'
+     x-init="init()"
+     x-cloak>
+
+  <!-- DISCOVERY MODE: /events tanpa event_id -->
+  <div x-show="!event" x-cloak>
+    <section class="bg-slate-950 text-white relative overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-slate-950 to-blue-900/20"></div>
+      <div class="relative max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20 text-center">
+        <h1 class="font-display font-semibold text-3xl sm:text-5xl mb-3 text-white">
+          Pilihan Event
+        </h1>
+        <p class="text-slate-300 max-w-2xl mx-auto leading-relaxed">
+          Temukan kompetisi yang ingin kamu lihat atau dukung.
+        </p>
+      </div>
+    </section>
+
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="ev in allEvents" :key="ev.id">
+          <div @click="switchEvent(ev)"
+               class="group cursor-pointer p-5 rounded-3xl border-2 transition-all duration-300
+                      bg-white hover:border-blue-300 hover:shadow-lg hover:scale-[1.02]"
+               :class="event && event.id === ev.id
+                 ? 'border-blue-600 bg-blue-50 shadow-xl scale-[1.02]'
+                 : 'border-gray-200'">
+            <div class="flex items-center justify-between mb-3">
+              <span class="px-3 py-1 rounded-full text-xs font-medium"
+                    :class="ev.status_code === 'VOTING_OPEN'
+                      ? 'bg-blue-100 text-blue-700'
+                      : ev.status_code === 'PUBLISHED' || ev.status_code === 'FINISHED' || ev.status_code === 'VOTING_CLOSED'
+                        ? 'bg-gray-100 text-gray-700'
+                        : 'bg-rose-100 text-rose-700'">
+                <span x-text="ev.status || '-'"></span>
+              </span>
+              <span x-show="ev.total_votes" class="text-xs text-gray-500 font-medium"
+                    x-text="ev.total_votes.toLocaleString('id-ID') + ' vote'"></span>
+            </div>
+            <h3 class="font-display font-semibold text-lg text-navy group-hover:text-blue-700 transition-colors mb-3"
+                x-text="ev.name || '-'"></h3>
+            <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+              <span x-show="ev.total_teams" class="flex items-center gap-1">
+                <span>👥</span> <span x-text="ev.total_teams"></span> tim
+              </span>
+              <span x-show="ev.total_supporters" class="flex items-center gap-1">
+                <span>❤️</span> <span x-text="ev.total_supporters"></span> donatur
+              </span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENT DETAIL MODE: /events?event_id=xxx -->
+  <div x-show="event" x-cloak>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+
+      <a href="/events" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 shadow-sm transition hover:border-slate-300 hover:text-navy mb-4">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        <span>Kembali ke Event</span>
+      </a>
+
+      <!-- Event Header -->
+      <div class="mb-8 animate-fade-in" style="animation-delay: 50ms">
+        <div class="flex items-start justify-between mb-2">
+          <h2 class="font-display font-semibold text-2xl text-navy" x-text="event?.name || ''"></h2>
+          <span class="px-3 py-1 rounded-full text-xs font-medium"
+                :class="event?.status_code === 'VOTING_OPEN'
+                  ? 'bg-blue-100 text-blue-700'
+                  : event?.status_code === 'PUBLISHED' || event?.status_code === 'FINISHED' || event?.status_code === 'VOTING_CLOSED'
+                    ? 'bg-gray-100 text-gray-700'
+                    : 'bg-rose-100 text-rose-700'">
+            <span x-text="event?.status || '-'"></span>
+          </span>
+        </div>
+        <p class="text-slate-600 max-w-2xl" x-text="event?.description || ''"></p>
+      </div>
+
+      <!-- Feature Navigation (Primary) -->
+      <div class="flex gap-2 bg-slate-100 p-2 rounded-2xl mb-8 shadow-inner">
+        <template x-for="t in ['peserta', 'leaderboard', 'donatur']" :key="t">
+          <button @click="tab = t"
+                  :class="activeClass(t)"
+                  class="flex-1 py-3 px-4 rounded-xl text-sm font-display font-medium
+                         transition-all duration-300">
+            <span x-text="t.charAt(0).toUpperCase() + t.slice(1)"></span>
+          </button>
+        </template>
+      </div>
+
+      <!-- Transition Wrapper -->
+      <div x-show="!isTransitioning"
+           x-transition:leave="transition duration-300 ease-in"
+           x-transition:leave-start="opacity-100 scale-100"
+           x-transition:leave-end="opacity-0 scale-95"
+           x-transition:enter="transition duration-300 ease-out"
+           x-transition:enter-start="opacity-0 scale-95"
+           x-transition:enter-end="opacity-100 scale-100">
+
+        <!-- Tab: Peserta -->
+        <div x-show="tab === 'peserta'" x-cloak>
+          <div x-show="loading.peserta" x-cloak>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <template x-for="i in 6">
+                <div class="bg-white rounded-3xl border border-gray-200 p-5 animate-pulse">
+                  <div class="h-8 w-8 bg-gray-300 rounded-full mb-4"></div>
+                  <div class="h-5 bg-gray-300 rounded mb-2"></div>
+                  <div class="h-4 bg-gray-300 rounded w-3/4 mb-4"></div>
+                  <div class="h-10 bg-gray-300 rounded-2xl"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div x-show="error.peserta" x-cloak class="text-center py-12">
+            <p class="text-red-500 font-medium" x-text="error.peserta"></p>
+          </div>
+
+          <div x-show="!loading.peserta && !error.peserta" x-cloak>
+            <template x-if="dataPeserta.length === 0">
+              <div class="text-center py-16 text-gray-400">
+                <p class="font-display text-lg mb-2">Belum ada peserta</p>
+                <p class="text-sm">Peserta akan ditampilkan setelah didaftarkan oleh panitia.</p>
+              </div>
+            </template>
+            <template x-if="dataPeserta.length > 0">
+              <div>
+                <div class="mb-6">
+                  <h3 class="font-display font-semibold text-navy text-lg">PESERTA KOMPETISI</h3>
+                  <p class="text-sm text-gray-500 mt-1">
+                    <span x-text="dataPeserta.length"></span> peserta terdaftar
+                    <span class="text-gray-400">· Urutan berdasarkan nomor undi</span>
+                  </p>
+                </div>
+
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  <template x-for="team in paginatedParticipants" :key="team.id">
+                    <div @click="window.location.href = `/events/${event?.id}/vote/${team.id}`"
+                         class="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-300 flex flex-col cursor-pointer">
+                      <div class="p-4 flex flex-col flex-1">
+                        <div class="flex items-center gap-3 mb-3">
+                          <span class="flex items-center justify-center w-10 h-10 rounded-lg bg-slate-100 text-sm font-score text-slate-600">
+                            <span x-text="String(team.rank).padStart(2, '0')"></span>
+                          </span>
+                          <div class="flex items-center gap-2">
+                            <img
+                              x-show="team.logo_url || team.photo_url"
+                              :src="team.logo_url || team.photo_url"
+                              alt="Logo"
+                              class="w-10 h-10 rounded-lg object-cover border border-gray-100"
+                            >
+                            <div x-show="!team.logo_url && !team.photo_url"
+                                 class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center border border-gray-100">
+                              <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                  d="M12 12c2.761 0 5-2.239 5-5S14.761 2 12 2 7 4.239 7 7s2.239 5 5 5zm0 2c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z">
+                                </path>
+                              </svg>
+                            </div>
+                            <div class="min-w-0">
+                              <p class="font-display font-medium text-navy text-sm truncate" x-text="team.name"></p>
+                              <p class="text-xs text-gray-400 truncate" x-text="team.school || ''"></p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="mt-auto border-t border-gray-100 px-4 py-2.5 flex items-center justify-between">
+                        <span class="text-xs font-medium"
+                              :class="event?.is_voting_open ? 'text-emerald-600' : 'text-gray-400'"
+                              x-text="event?.is_voting_open ? '✓ VOTING DIBUKA' : 'VOTING DITUTUP'"></span>
+                        <span class="text-sm font-semibold text-navy" x-text="team.votes.toLocaleString('id-ID') + ' VOTE'"></span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+
+                <p
+                  x-show="dataPeserta.length > 0"
+                  class="text-sm text-gray-500 text-center mt-4"
+                >
+                  Menampilkan
+                  <span x-text="participantDisplayStart"></span>–
+                  <span x-text="participantDisplayEnd"></span>
+                  dari
+                  <span x-text="dataPeserta.length"></span>
+                  peserta
+                </p>
+
+                <div
+                  x-show="participantTotalPages > 1"
+                  class="mt-4 flex flex-col items-center gap-3"
+                >
+                  <div class="flex items-center justify-center gap-2">
+
+                    <button
+                      @click="prevParticipantPage()"
+                      :disabled="participantPage <= 1"
+                      class="px-4 py-2 rounded-xl border text-sm font-medium transition-colors"
+                      :class="participantPage <= 1
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-navy hover:bg-gray-50'"
+                    >
+                      Sebelumnya
+                    </button>
+
+                    <div class="flex items-center gap-1">
+
+                      <template
+                        x-for="page in participantTotalPages"
+                        :key="page"
+                      >
+                        <button
+                          @click="goToParticipantPage(page)"
+                          class="w-9 h-9 rounded-lg text-sm font-medium transition-colors"
+                          :class="page === participantPage
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-white text-navy hover:bg-gray-50'"
+                          x-text="page"
+                        ></button>
+                      </template>
+
+                    </div>
+
+                    <button
+                      @click="nextParticipantPage()"
+                      :disabled="participantPage >= participantTotalPages"
+                      class="px-4 py-2 rounded-xl border text-sm font-medium transition-colors"
+                      :class="participantPage >= participantTotalPages
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-white text-navy hover:bg-gray-50'"
+                    >
+                      Selanjutnya
+                    </button>
+
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Tab: Leaderboard -->
+        <div x-show="tab === 'leaderboard'" x-cloak>
+          <div x-show="loading.leaderboard" x-cloak>
+            <div class="space-y-3">
+              <template x-for="i in 10">
+                <div class="bg-white rounded-2xl p-4 animate-pulse flex items-center">
+                  <div class="w-8 h-8 bg-gray-300 rounded-full mr-4"></div>
+                  <div class="flex-1">
+                    <div class="h-5 bg-gray-300 rounded mb-1"></div>
+                    <div class="h-4 bg-gray-300 rounded w-2/3"></div>
+                  </div>
+                  <div class="w-16 h-6 bg-gray-300 rounded"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div x-show="error.leaderboard" x-cloak class="text-center py-12">
+            <p class="text-red-500 font-medium" x-text="error.leaderboard"></p>
+          </div>
+
+          <div x-show="!loading.leaderboard && !error.leaderboard" x-cloak>
+            <template x-if="currentData.length === 0">
+              <div class="text-center py-16 text-gray-400">
+                <p class="font-display text-lg mb-2">Belum ada data leaderboard</p>
+                <p class="text-sm">Data akan muncul setelah ada vote masuk.</p>
+              </div>
+            </template>
+            <template x-if="currentData.length > 0">
+              <!-- PODIUM RESPONSIVE -->
+              <div class="grid grid-cols-3 items-end justify-center gap-1 sm:gap-3 lg:gap-4 w-full max-w-4xl mx-auto mb-12">
+                <!-- RANK 2 -->
+                <template x-if="currentData[1]">
+                  <div class="w-full min-w-0">
+                    <div class="bg-white rounded-2xl shadow-lg border overflow-hidden">
+                      <div class="h-2 bg-slate-400"></div>
+                      <div class="p-3 sm:p-5 text-center">
+                        <div class="text-2xl sm:text-3xl lg:text-4xl">🥈</div>
+                        <div class="mt-2 sm:mt-3">
+                          <img
+                            x-show="currentData[1].logo_url"
+                            :src="currentData[1].logo_url"
+                            class="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover mx-auto border-2 sm:border-4 border-slate-100">
+                        </div>
+                        <h2 class="mt-2 sm:mt-4 text-sm sm:text-lg font-black" x-text="currentData[1].name"></h2>
+                        <p class="text-slate-500 mt-0.5 sm:mt-1 text-xs sm:text-sm">Peringkat #2</p>
+                        <h3 class="mt-2 sm:mt-4 text-xl sm:text-3xl font-black text-slate-900" x-text="currentData[1].votes.toLocaleString('id-ID')"></h3>
+                        <p class="text-slate-500 text-xs sm:text-sm">Vote</p>
+                      </div>
+                    </div>
+                    <div class="bg-slate-300 rounded-t-2xl h-12 sm:h-20"></div>
+                  </div>
+                </template>
+
+                <!-- RANK 1 -->
+                <template x-if="currentData[0]">
+                  <div class="w-full min-w-0 lg:-mt-8">
+                    <div class="bg-gradient-to-b from-blue-600 to-slate-900 rounded-2xl shadow-2xl text-white overflow-hidden">
+                      <div class="p-4 sm:p-7 text-center">
+                        <div class="text-3xl sm:text-4xl lg:text-5xl">👑</div>
+                        <div class="mt-2 sm:mt-3">
+                          <img
+                            x-show="currentData[0].logo_url"
+                            :src="currentData[0].logo_url"
+                            class="w-16 h-16 sm:w-24 sm:h-24 rounded-full object-cover mx-auto border-2 sm:border-4 border-white">
+                        </div>
+                        <h2 class="mt-2 sm:mt-4 text-base sm:text-xl font-black" x-text="currentData[0].name"></h2>
+                        <div class="mt-1.5 sm:mt-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm">
+                          🥇 Champion
+                        </div>
+                        <h3 class="mt-3 sm:mt-6 text-2xl sm:text-4xl font-black" x-text="currentData[0].votes.toLocaleString('id-ID')"></h3>
+                        <p class="opacity-80 text-xs sm:text-sm">Total Vote</p>
+                      </div>
+                    </div>
+                    <div class="bg-blue-700 rounded-t-2xl h-16 sm:h-28"></div>
+                  </div>
+                </template>
+
+                <!-- RANK 3 -->
+                <template x-if="currentData[2]">
+                  <div class="w-full min-w-0">
+                    <div class="bg-white rounded-2xl shadow-lg border overflow-hidden">
+                      <div class="h-2 bg-orange-500"></div>
+                      <div class="p-3 sm:p-5 text-center">
+                        <div class="text-2xl sm:text-3xl lg:text-4xl">🥉</div>
+                        <div class="mt-2 sm:mt-3">
+                          <img
+                            x-show="currentData[2].logo_url"
+                            :src="currentData[2].logo_url"
+                            class="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover mx-auto border-2 sm:border-4 border-slate-100">
+                        </div>
+                        <h2 class="mt-2 sm:mt-4 text-sm sm:text-lg font-black" x-text="currentData[2].name"></h2>
+                        <p class="text-slate-500 mt-0.5 sm:mt-1 text-xs sm:text-sm">Peringkat #3</p>
+                        <h3 class="mt-2 sm:mt-4 text-xl sm:text-3xl font-black text-slate-900" x-text="currentData[2].votes.toLocaleString('id-ID')"></h3>
+                        <p class="text-slate-500 text-xs sm:text-sm">Vote</p>
+                      </div>
+                    </div>
+                    <div class="bg-orange-400 rounded-t-2xl h-12 sm:h-16"></div>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- RANKING CARDS -->
+            <template x-if="currentData.length > 3">
+              <div class="space-y-4">
+                <template x-for="team in rankingData" :key="team.id">
+                  <div class="bg-white rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+                    <div class="flex flex-col lg:flex-row lg:items-center gap-4 p-4">
+                      <div class="text-2xl font-black text-slate-300 w-12 text-center" x-text="'#' + team.rank"></div>
+
+                      <img
+                        x-show="team.logo_url"
+                        :src="team.logo_url"
+                        class="w-16 h-16 rounded-full object-cover">
+
+                      <div class="flex-1">
+                        <div class="flex justify-between items-center gap-2">
+                          <h2 class="text-lg font-bold" x-text="team.name"></h2>
+                          <template x-if="team.trend === 'up'">
+                            <span class="text-xs rounded-full bg-emerald-50 px-2 py-1 text-emerald-700 whitespace-nowrap">
+                              ▲ Naik
+                            </span>
+                          </template>
+                          <template x-if="team.trend === 'down'">
+                            <span class="text-xs rounded-full bg-rose-50 px-2 py-1 text-rose-700 whitespace-nowrap">
+                              ▼ Turun
+                            </span>
+                          </template>
+                          <template x-if="team.trend === 'same'">
+                            <span class="text-xs rounded-full bg-slate-100 px-2 py-1 text-slate-600 whitespace-nowrap">
+                              = Stabil
+                            </span>
+                          </template>
+                        </div>
+                        <div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            class="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-700"
+                            :style="`width: ${Math.min(100, (team.votes / (currentData[0]?.votes || 1)) * 100)}%`">
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="text-right">
+                        <h2 class="text-2xl font-black" x-text="team.votes.toLocaleString('id-ID')"></h2>
+                        <p class="text-xs text-slate-500">Vote</p>
+                      </div>
+
+                      <template x-if="event?.is_voting_open">
+                        <a
+                          :href="`/events/${event?.id}/vote/${team.id}`"
+                          class="inline-flex px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors text-xs whitespace-nowrap">
+                          Vote
+                        </a>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Tab: Donatur -->
+        <div x-show="tab === 'donatur'" x-cloak>
+          <div x-show="loading.donatur" x-cloak>
+            <div class="space-y-3">
+              <template x-for="i in 8">
+                <div class="bg-white rounded-2xl p-4 animate-pulse flex items-center">
+                  <div class="w-10 h-10 bg-gray-300 rounded-full mr-4"></div>
+                  <div class="flex-1">
+                    <div class="h-5 bg-gray-300 rounded mb-1"></div>
+                    <div class="h-4 bg-gray-300 rounded w-3/4"></div>
+                  </div>
+                  <div class="w-20 h-6 bg-gray-300 rounded"></div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <div x-show="error.donatur" x-cloak class="text-center py-12">
+            <p class="text-red-500 font-medium" x-text="error.donatur"></p>
+          </div>
+
+          <div x-show="!loading.donatur && !error.donatur" x-cloak>
+            <template x-if="currentData.length === 0">
+              <div class="text-center py-16 text-gray-400">
+                <p class="font-display text-lg mb-2">Belum ada donatur</p>
+                <p class="text-sm">Donatur akan muncul setelah melakukan pembayaran.</p>
+              </div>
+            </template>
+            <template x-if="currentData.length > 0">
+              <!-- PODIUM RESPONSIVE -->
+              <div class="grid grid-cols-3 items-end justify-center gap-1 sm:gap-3 lg:gap-4 w-full max-w-4xl mx-auto mb-12">
+                <!-- RANK 2 -->
+                <template x-if="currentData[1]">
+                  <div class="w-full min-w-0">
+                    <div class="bg-white rounded-2xl shadow-lg border overflow-hidden">
+                      <div class="h-2 bg-slate-400"></div>
+                      <div class="p-3 sm:p-5 text-center">
+                        <div class="text-2xl sm:text-3xl lg:text-4xl">🥈</div>
+                        <div class="mt-2 sm:mt-3">
+                          <div class="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-slate-100 flex items-center justify-center mx-auto border-2 sm:border-4 border-slate-100 text-slate-400 text-lg sm:text-2xl font-bold">
+                            <span x-text="currentData[1].name.charAt(0).toUpperCase()"></span>
+                          </div>
+                        </div>
+                        <h2 class="mt-2 sm:mt-4 text-sm sm:text-lg font-black" x-text="currentData[1].name"></h2>
+                        <p class="text-slate-500 mt-0.5 sm:mt-1 text-xs sm:text-sm">Peringkat #2</p>
+                        <h3 class="mt-2 sm:mt-4 text-xl sm:text-3xl font-black text-slate-900" x-text="formatCurrency(currentData[1].amount)"></h3>
+                        <p class="text-slate-500 text-xs sm:text-sm">Donasi</p>
+                        <p class="mt-1 sm:mt-2 text-base sm:text-xl font-black text-slate-900" x-text="currentData[1].votes.toLocaleString('id-ID')"></p>
+                        <p class="text-slate-500 text-xs sm:text-sm">Vote</p>
+                      </div>
+                    </div>
+                    <div class="bg-slate-300 rounded-t-2xl h-12 sm:h-20"></div>
+                  </div>
+                </template>
+
+                <!-- RANK 1 -->
+                <template x-if="currentData[0]">
+                  <div class="w-full min-w-0 lg:-mt-8">
+                    <div class="bg-gradient-to-b from-blue-600 to-slate-900 rounded-2xl shadow-2xl text-white overflow-hidden">
+                      <div class="p-4 sm:p-7 text-center">
+                        <div class="text-3xl sm:text-4xl lg:text-5xl">👑</div>
+                        <div class="mt-2 sm:mt-3">
+                          <div class="w-16 h-16 sm:w-24 sm:h-24 rounded-full bg-white/10 flex items-center justify-center mx-auto border-2 sm:border-4 border-white text-white text-xl sm:text-3xl font-bold">
+                            <span x-text="currentData[0].name.charAt(0).toUpperCase()"></span>
+                          </div>
+                        </div>
+                        <h2 class="mt-2 sm:mt-4 text-base sm:text-xl font-black" x-text="currentData[0].name"></h2>
+                        <p x-show="currentData[0].team_name" class="opacity-80 mt-0.5 sm:mt-1 text-xs sm:text-sm" x-text="currentData[0].team_name"></p>
+                        <div class="mt-1.5 sm:mt-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm">
+                          🥇 Champion
+                        </div>
+                        <h3 class="mt-3 sm:mt-6 text-2xl sm:text-4xl font-black" x-text="formatCurrency(currentData[0].amount)"></h3>
+                        <p class="opacity-80 text-xs sm:text-sm">Total Donasi</p>
+                        <p class="mt-1 sm:mt-2 text-xl sm:text-2xl font-black" x-text="currentData[0].votes.toLocaleString('id-ID')"></p>
+                        <p class="opacity-80 text-xs sm:text-sm">Vote</p>
+                      </div>
+                    </div>
+                    <div class="bg-blue-700 rounded-t-2xl h-16 sm:h-28"></div>
+                  </div>
+                </template>
+
+                <!-- RANK 3 -->
+                <template x-if="currentData[2]">
+                  <div class="w-full min-w-0">
+                    <div class="bg-white rounded-2xl shadow-lg border overflow-hidden">
+                      <div class="h-2 bg-orange-500"></div>
+                      <div class="p-3 sm:p-5 text-center">
+                        <div class="text-2xl sm:text-3xl lg:text-4xl">🥉</div>
+                        <div class="mt-2 sm:mt-3">
+                          <div class="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-slate-100 flex items-center justify-center mx-auto border-2 sm:border-4 border-slate-100 text-slate-400 text-lg sm:text-2xl font-bold">
+                            <span x-text="currentData[2].name.charAt(0).toUpperCase()"></span>
+                          </div>
+                        </div>
+                        <h2 class="mt-2 sm:mt-4 text-sm sm:text-lg font-black" x-text="currentData[2].name"></h2>
+                        <p x-show="currentData[2].team_name" class="text-slate-500 mt-0.5 sm:mt-1 text-xs sm:text-sm" x-text="currentData[2].team_name"></p>
+                        <p class="text-slate-500 mt-0.5 sm:mt-1 text-xs sm:text-sm">Peringkat #3</p>
+                        <h3 class="mt-2 sm:mt-4 text-xl sm:text-3xl font-black text-slate-900" x-text="formatCurrency(currentData[2].amount)"></h3>
+                        <p class="text-slate-500 text-xs sm:text-sm">Donasi</p>
+                        <p class="mt-1 sm:mt-2 text-base sm:text-xl font-black text-slate-900" x-text="currentData[2].votes.toLocaleString('id-ID')"></p>
+                        <p class="text-slate-500 text-xs sm:text-sm">Vote</p>
+                      </div>
+                    </div>
+                    <div class="bg-orange-400 rounded-t-2xl h-12 sm:h-16"></div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- MOBILE TOP 3 -->
+              <div class="lg:hidden space-y-5 mb-10">
+                <template x-for="(donor, index) in podiumData" :key="donor.id">
+                  <div class="bg-white rounded-3xl shadow-sm border p-6">
+                    <div class="flex gap-5 items-center">
+                      <div class="text-5xl" x-text="index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'"></div>
+                      <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center border-4 border-slate-100 text-slate-400 text-2xl font-bold">
+                        <span x-text="donor.name.charAt(0).toUpperCase()"></span>
+                      </div>
+                      <div class="flex-1">
+                        <h2 class="font-bold text-xl" x-text="donor.name"></h2>
+                        <p x-show="donor.team_name" class="text-slate-500 mt-1" x-text="donor.team_name"></p>
+                        <p class="text-slate-500 mt-1">Rank #<span x-text="donor.rank"></span></p>
+                        <h3 class="mt-3 text-3xl font-black" x-text="formatCurrency(donor.amount)"></h3>
+                        <p class="text-slate-500 text-sm">Donasi</p>
+                        <p class="mt-1 text-xl font-black" x-text="donor.votes.toLocaleString('id-ID')"></p>
+                        <p class="text-slate-500 text-sm">Vote</p>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+
+            <!-- RANKING CARDS -->
+            <template x-if="currentData.length > 3">
+              <div class="space-y-4">
+                <template x-for="donor in rankingData" :key="donor.id">
+                  <div class="bg-white rounded-2xl border shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden">
+                    <div class="flex flex-col lg:flex-row lg:items-center gap-4 p-4">
+                      <div class="text-2xl font-black text-slate-300 w-12 text-center" x-text="'#' + donor.rank"></div>
+
+                      <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xl font-bold">
+                        <span x-text="donor.name.charAt(0).toUpperCase()"></span>
+                      </div>
+
+                      <div class="flex-1">
+                        <div class="flex justify-between items-center gap-2">
+                          <div>
+                            <h2 class="text-lg font-bold" x-text="donor.name"></h2>
+                            <p x-show="donor.team_name" class="text-sm text-gray-400" x-text="donor.team_name"></p>
+                          </div>
+                          <div class="text-right">
+                            <h2 class="text-2xl font-black" x-text="formatCurrency(donor.amount)"></h2>
+                            <p class="text-xs text-slate-500">Donasi</p>
+                          </div>
+                        </div>
+                        <div class="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            class="h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-700"
+                            :style="`width: ${Math.min(100, (donor.amount / (currentData[0]?.amount || 1)) * 100)}%`">
+                          </div>
+                        </div>
+                        <div class="mt-2 text-right">
+                          <span class="text-sm text-slate-600" x-text="donor.votes.toLocaleString('id-ID') + ' vote'"></span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/events.js"></script>
+{% endblock %}

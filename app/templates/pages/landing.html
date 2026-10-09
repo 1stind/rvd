@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Web Voting Championship — Dukung Tim Favoritmu{% endblock %}
+
+{% block content %}
+
+<!-- HERO -->
+<section class="relative overflow-hidden bg-slate-950 text-white">
+  <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900"></div>
+  <div class="absolute -top-48 -right-48 w-[500px] h-[500px] rounded-full bg-blue-600/10 blur-3xl"></div>
+  <div class="absolute -bottom-40 -left-40 w-[450px] h-[450px] rounded-full bg-cyan-400/10 blur-3xl"></div>
+
+  <div class="relative max-w-7xl mx-auto px-4 sm:px-6 pt-14 pb-16 sm:pt-20 sm:pb-0 grid lg:grid-cols-2 gap-12 items-center">
+
+    <div>
+      {% if event %}
+      <p class="font-display uppercase tracking-widest text-brand-bright text-xs sm:text-sm mb-4">
+        Voting Open · {{ event.name }}
+      </p>
+      {% endif %}
+      <h1 class="font-display font-semibold text-4xl sm:text-5xl leading-tight mb-5">
+        Satu suara, <span class="text-brand-bright">satu transaksi</span>,<br class="hidden sm:block"> nol kecurangan.
+      </h1>
+      <p class="text-white/70 text-base sm:text-lg mb-8 max-w-md">
+        {% if event %}{{ event.description }}{% else %}Platform voting kompetisi online yang transparan dan bisa diaudit.{% endif %}
+      </p>
+      <div class="flex flex-wrap gap-3">
+        <a href="/events" class="px-6 py-3 rounded bg-brand hover:bg-brand-bright transition-colors font-display uppercase tracking-wide text-sm">
+          Lihat Event &amp;
+        </a>
+      </div>
+    </div>
+
+    <!-- Live scoreboard preview top 3 -->
+    {% if leaderboard %}
+    <div x-data='scoreboard({{ leaderboard | tojson }}, { live: false })' class="bg-navy-800 rounded-2xl border border-white/10 p-5 sm:p-6">
+      <div class="flex items-center justify-between mb-5">
+        <p class="font-display uppercase tracking-widest text-xs text-white/40">Top 3 Sementara</p>
+        <span class="flex items-center gap-1.5 text-xs text-white/40">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> live
+        </span>
+      </div>
+      <ul class="space-y-3">
+        <template x-for="team in teams" :key="team.id">
+          <li class="flex items-center gap-3 bg-white/5 rounded-lg px-3 py-3">
+            <span class="rank-badge w-9 h-9 text-base font-score shrink-0" :data-tier="tierAttr(team.rank)" x-text="team.rank"></span>
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-sm truncate" x-text="team.name"></p>
+              <p class="text-white/40 text-xs truncate" x-text="team.school"></p>
+            </div>
+            <span class="font-score text-lg text-white shrink-0" x-text="formatVotes(team.votes)"></span>
+          </li>
+        </template>
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if event %}
+  <div x-data='landingPage({{ event | tojson }})' x-init="init()" x-cloak>
+    <div class="relative max-w-7xl mx-auto px-2 py-12 sm:py-10">
+      <div class="mt-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-12">
+        <div class="max-w-2xl">
+          <h1 class="mt-6 text-4xl md:text-6xl font-black leading-tight tracking-tight" x-text="event.name">
+            {{ event.name if event else '' }}
+          </h1>
+          <p class="mt-6 text-lg text-slate-300 leading-8">
+            Pantau perkembangan voting secara realtime.<br>
+            Dukung tim favoritmu dan lihat perubahan ranking setiap detik.
+          </p>
+        </div>
+        <div class="bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 p-8 w-full lg:w-[420px]">
+          <p class="uppercase tracking-[0.25em] text-xs text-slate-400">Voting Berakhir Dalam</p>
+          <div class="grid grid-cols-4 gap-4 mt-8">
+          </span>
+            <div class="text-center">
+              <div class="bg-white/10 rounded-2xl py-5">
+                <h2 class="text-4xl font-black" x-text="countdown.days">00</h2>
+              </div>
+              <p class="mt-2 text-xs text-slate-400">Hari</p>
+            </div>
+            <div class="text-center">
+              <div class="bg-white/10 rounded-2xl py-5">
+                <h2 class="text-4xl font-black" x-text="countdown.hours">00</h2>
+              </div>
+              <p class="mt-2 text-xs text-slate-400">Jam</p>
+            </div>
+            <div class="text-center">
+              <div class="bg-white/10 rounded-2xl py-5">
+                <h2 class="text-4xl font-black" x-text="countdown.minutes">00</h2>
+              </div>
+              <p class="mt-2 text-xs text-slate-400">Menit</p>
+            </div>
+            <div class="text-center">
+              <div class="bg-white/10 rounded-2xl py-5">
+                <h2 class="text-4xl font-black" x-text="countdown.seconds">00</h2>
+              </div>
+              <p class="mt-2 text-xs text-slate-400">Detik</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <span class="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 border border-emerald-400/20 px-4 py-2 text-sm text-emerald-300">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            LIVE VOTING
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="max-w-6xl mx-auto px-4 sm:px-6 py-16 sm:py-20">
+  <p class="font-display uppercase tracking-widest text-brand text-xs sm:text-sm mb-2">Alurnya</p>
+  <h2 class="font-display font-semibold text-2xl sm:text-3xl text-navy mb-10">Dari pembayaran ke suara, otomatis dan transparan</h2>
+
+  <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    {% set steps = [
+      ("01", "Pilih tim", "Cari tim atau peserta yang ingin kamu dukung di halaman event."),
+      ("02", "Isi data diri", "Masukkan nama, email, dan nomor WhatsApp kamu."),
+      ("03", "Tentukan jumlah vote", "Pilih berapa banyak vote yang ingin kamu berikan."),
+      ("04", "Bayar via QRIS", "Scan dan bayar lewat Midtrans. Suara masuk otomatis setelah terverifikasi."),
+    ] %}
+    {% for num, title, desc in steps %}
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <p class="font-score text-3xl text-brand/30 mb-2">{{ num }}</p>
+      <p class="font-display font-medium text-navy mb-1.5">{{ title }}</p>
+      <p class="text-sm text-gray-500 leading-relaxed">{{ desc }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/leaderboard.js"></script>
+<script src="/static/js/landing.js"></script>
+{% endblock %}

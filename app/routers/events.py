@@ -1,0 +1,178 @@
+"""
+Events & teams API — public read + admin CRUD.
+Business logic lives in services; queries in repositories.
+"""
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+from app.enums.event_status import EventStatus
+from app.repositories import event as event_repo
+from app.repositories import team as team_repo
+from app.routers.deps import AdminUserJwt, DbSession
+from app.schemas.common import ok
+from app.schemas.event import EventCreate, EventOut, EventUpdate
+from app.schemas.team import TeamCreate, TeamOut, TeamUpdate, TeamWithVotes
+from app.services import event_service
+from app.services import cache
+
+router = APIRouter(prefix="/api/v1", tags=["events"])
+
+
+def _event_out(event) -> dict:
+    data = EventOut.model_validate(event).model_dump()
+    data["status_label"] = {
+        EventStatus.DRAFT: "Draft",
+        EventStatus.PUBLISHED: "Published",
+        EventStatus.VOTING_OPEN: "Voting Open",
+        EventStatus.VOTING_CLOSED: "Voting Closed",
+        EventStatus.FINISHED: "Finished",
+        EventStatus.ARCHIVED: "Archived",
+    }.get(event.status, event.status.value)
+    return data
+
+
+# --- Public ----------------------------------------------------------------
+@router.get("/events")
+async def list_events(
+    status: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_db),
+):
+    status_enum = EventStatus(status) if status else None
+    events = await event_repo.list_events(session, status=status_enum)
+    return ok([_event_out(e) for e in events])
+
+
+@router.get("/events/{event_id}")
+async def get_event(event_id: str, session: AsyncSession = Depends(get_db)):
+    event = await event_service.get_event_or_404(session, event_id)
+    return ok(_event_out(event))
+
+
+@router.get("/events/{event_id}/teams")
+async def list_teams(event_id: str, session: AsyncSession = Depends(get_db)):
+    await event_service.get_event_or_404(session, event_id)
+    pairs = await team_repo.get_teams_with_votes(session, event_id)
+    result = []
+    for rank, (team, votes) in enumerate(pairs, start=1):
+        data = TeamOut.model_validate(team).model_dump()
+        data.update({"votes": votes, "rank": rank})
+        result.append(data)
+    return ok(result)
+
+
+@router.get("/events/{event_id}/donors")
+async def list_donors(
+    event_id: str,
+    session: AsyncSession = Depends(get_db),
+):
+    await event_service.get_event_or_404(session, event_id)
+    payload = await event_service.build_donors(session, event_id)
+    return ok(payload)
+
+
+@router.get("/leaderboard")
+async def leaderboard(
+    event_id: str = Query(..., description="ID event"),
+    limit: int = Query(default=100, ge=1, le=500),
+    session: AsyncSession = Depends(get_db),
+):
+    event = await event_service.get_event_or_404(session, event_id)
+
+    cached = await cache.get_cached_leaderboard(event_id, limit)
+    if cached:
+        cached["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return ok(cached)
+
+    payload = await event_service.build_leaderboard(session, event_id, limit=limit)
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await cache.set_cached_leaderboard(event_id, payload, limit)
+    return ok(payload)
+
+
+# --- Admin CRUD ------------------------------------------------------------
+@router.post("/admin/events")
+async def create_event(
+    payload: EventCreate,
+    request: Request,
+    session: DbSession,
+    _: AdminUserJwt,
+):
+    event = await event_service.create_event(session, payload)
+    await _audit(session, request, "event.create", "event", event.id)
+    await session.commit()
+    return ok(_event_out(event), "Event berhasil dibuat")
+
+
+@router.put("/admin/events/{event_id}")
+async def update_event(
+    event_id: str,
+    payload: EventUpdate,
+    request: Request,
+    session: DbSession,
+    _: AdminUserJwt,
+):
+    event = await event_service.update_event(session, event_id, payload)
+    await _audit(session, request, "event.update", "event", event.id)
+    await session.commit()
+    return ok(_event_out(event), "Event berhasil diubah")
+
+
+@router.delete("/admin/events/{event_id}")
+async def delete_event(event_id: str, request: Request, session: DbSession, _: AdminUserJwt):
+    await event_service.soft_delete_event(session, event_id)
+    await _audit(session, request, "event.delete", "event", event_id)
+    await session.commit()
+    return ok(message="Event berhasil dihapus")
+
+
+@router.post("/admin/events/{event_id}/teams")
+async def create_team(
+    event_id: str,
+    payload: TeamCreate,
+    request: Request,
+    session: DbSession,
+    _: AdminUserJwt,
+):
+    payload.event_id = event_id
+    team = await event_service.create_team(session, payload)
+    await _audit(session, request, "team.create", "team", team.id)
+    await session.commit()
+    return ok(TeamOut.model_validate(team).model_dump(), "Tim berhasil dibuat")
+
+
+@router.put("/admin/events/{event_id}/teams/{team_id}")
+async def update_team(
+    event_id: str,
+    team_id: str,
+    payload: TeamUpdate,
+    request: Request,
+    session: DbSession,
+    _: AdminUserJwt,
+):
+    team = await event_service.update_team(session, event_id, team_id, payload)
+    await _audit(session, request, "team.update", "team", team.id)
+    await session.commit()
+    return ok(TeamOut.model_validate(team).model_dump(), "Tim berhasil diubah")
+
+
+@router.delete("/admin/events/{event_id}/teams/{team_id}")
+async def delete_team(
+    event_id: str,
+    team_id: str,
+    request: Request,
+    session: DbSession,
+    _: AdminUserJwt,
+):
+    await event_service.soft_delete_team(session, event_id, team_id)
+    await _audit(session, request, "team.delete", "team", team_id)
+    await session.commit()
+    return ok(message="Tim berhasil dihapus")
+
+
+async def _audit(session, request, action, entity_type, entity_id):
+    from app.services.audit_service import record
+
+    await record(session, action=action, request=request, entity_type=entity_type, entity_id=entity_id)

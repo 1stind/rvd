@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Progress Checklist - Web Voting Championship{% endblock %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-gray-100">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar"
+    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
+
+    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
+
+    <nav class="space-y-1 text-sm">
+      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
+      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
+      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
+      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
+      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
+      <a href="/admin/progress" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Progress</a>
+    </nav>
+
+  </aside>
+
+  <!-- OVERLAY -->
+  <div id="overlay"
+    onclick="toggleSidebar()"
+    class="fixed inset-0 bg-black/30 hidden md:hidden">
+  </div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR -->
+    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
+        <h1 class="text-lg font-semibold text-gray-800">Progress Checklist</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
+        <span class="text-sm font-medium text-gray-700">Admin</span>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="p-6 space-y-6 overflow-y-auto">
+
+      <!-- SUMMARY -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+          <p class="text-sm text-gray-500">Total Items</p>
+          <h2 class="text-2xl font-bold mt-1 text-gray-800" id="total-items">0</h2>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+          <p class="text-sm text-gray-500">Completed</p>
+          <h2 class="text-2xl font-bold mt-1 text-green-600" id="completed-items">0</h2>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+          <p class="text-sm text-gray-500">In Progress</p>
+          <h2 class="text-2xl font-bold mt-1 text-amber-600" id="progress-items">0</h2>
+        </div>
+        <div class="bg-white p-4 rounded-xl shadow-sm">
+          <p class="text-sm text-gray-500">Pending</p>
+          <h2 class="text-2xl font-bold mt-1 text-gray-500" id="pending-items">0</h2>
+        </div>
+      </div>
+
+      <!-- CHECKLIST -->
+      <div class="bg-white rounded-xl shadow-sm p-6">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">Development Checklist</h2>
+        <div class="space-y-3" id="checklist-container">
+          <!-- Items will be rendered by JS -->
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const checklistData = [
+    {
+      category: 'Database Architecture',
+      items: [
+        { id: 'db-1', text: 'Refactor database schema v2.0', status: 'completed', note: '11 tables, 7 enums, all constraints' },
+        { id: 'db-2', text: 'Alembic migration setup', status: 'completed', note: 'Initial migration with enum handling' },
+        { id: 'db-3', text: 'PostgreSQL 18.4 compatibility', status: 'completed', note: 'Fixed enum creation with create_type=False' },
+        { id: 'db-4', text: 'Soft delete implementation', status: 'completed', note: 'SoftDeleteMixin on applicable models' },
+        { id: 'db-5', text: 'Index optimization', status: 'completed', note: 'All required indexes created' },
+      ]
+    },
+    {
+      category: 'Authentication & Security',
+      items: [
+        { id: 'auth-1', text: 'JWT admin authentication', status: 'completed', note: 'Access token 15 menit, pure Bearer header' },
+        { id: 'auth-2', text: 'Remove session-based auth', status: 'completed', note: 'No cookies, no CSRF for admin' },
+        { id: 'auth-3', text: 'Remove public user registration/login', status: 'completed', note: 'Guest checkout only' },
+        { id: 'auth-4', text: 'Argon2 password hashing', status: 'completed', note: 'Never stored plain' },
+        { id: 'auth-5', text: 'Security headers middleware', status: 'completed', note: 'X-Content-Type-Options, X-Frame-Options' },
+      ]
+    },
+    {
+      category: 'Admin UI Pages',
+      items: [
+        { id: 'ui-1', text: 'Dashboard admin SPA', status: 'completed', note: 'Stats, recent transactions, export buttons' },
+        { id: 'ui-2', text: 'Events management page', status: 'completed', note: 'List, create, edit, delete with modals' },
+        { id: 'ui-3', text: 'Transactions page', status: 'completed', note: 'Filter by event/status, full table' },
+        { id: 'ui-4', text: 'Audit logs page', status: 'completed', note: 'Filter by action, timeline view' },
+        { id: 'ui-5', text: 'Settings page', status: 'completed', note: 'General + system settings with toggles' },
+      ]
+    },
+    {
+      category: 'Payment Integration',
+      items: [
+        { id: 'pay-1', text: 'Midtrans Snap integration', status: 'in_progress', note: 'create_payment with package support' },
+        { id: 'pay-2', text: 'Webhook handler with idempotency', status: 'in_progress', note: 'UNIQUE constraint on signature_key' },
+        { id: 'pay-3', text: 'Payment status tracking', status: 'in_progress', note: 'PENDING → SUCCESS/FAILED/EXPIRED' },
+        { id: 'pay-4', text: 'Supporter data storage', status: 'completed', note: 'name, email, phone, is_anonymous' },
+        { id: 'pay-5', text: 'Vote log immutable snapshot', status: 'completed', note: 'VoteLog as source of truth' },
+      ]
+    },
+    {
+      category: 'Public Voting Flow',
+      items: [
+        { id: 'pub-1', text: 'Guest checkout flow', status: 'completed', note: 'No account required' },
+        { id: 'pub-2', text: 'Vote package selection', status: 'completed', note: 'Bronze, Silver, Gold packages' },
+        { id: 'pub-3', text: 'Anonymous supporter option', status: 'completed', note: 'Hide name on public leaderboard' },
+        { id: 'pub-4', text: 'History lookup by Order ID/Phone/Email', status: 'completed', note: 'Public endpoints, no auth' },
+        { id: 'pub-5', text: 'SSE leaderboard realtime', status: 'pending', note: 'Redis pub/sub + Server Sent Event' },
+      ]
+    },
+    {
+      category: 'Queue & Leaderboard',
+      items: [
+        { id: 'ql-1', text: 'Team cached statistics', status: 'completed', note: 'total_votes, supporter_count, current_rank' },
+        { id: 'ql-2', text: 'Leaderboard snapshot history', status: 'completed', note: 'Point-in-time ranking capture' },
+        { id: 'ql-3', text: 'Queue session management', status: 'completed', note: 'With heartbeat + auto-expire' },
+        { id: 'ql-4', text: 'Queue lock mechanism', status: 'completed', note: 'client_ip, user_agent, heartbeat_at' },
+        { id: 'ql-5', text: 'Heartbeat timeout handling', status: 'pending', note: 'Auto-release slot if browser closed' },
+      ]
+    },
+    {
+      category: 'Export & Reporting',
+      items: [
+        { id: 'exp-1', text: 'Excel export for vote results', status: 'completed', note: 'openpyxl, event_id based' },
+        { id: 'exp-2', text: 'Excel export for payment report', status: 'completed', note: 'With status filter' },
+        { id: 'exp-3', text: 'Top supporter reporting', status: 'pending', note: 'Aggregated by payment data' },
+      ]
+    },
+    {
+      category: 'Deployment & DevOps',
+      items: [
+        { id: 'dep-1', text: 'PostgreSQL managed DB setup', status: 'pending', note: 'Neon/Railway recommended' },
+        { id: 'dep-2', text: 'Redis setup', status: 'pending', note: 'Required for rate limit + cache + SSE' },
+        { id: 'dep-3', text: 'Nginx + SSL configuration', status: 'pending', note: 'Let\'s Encrypt HTTPS' },
+        { id: 'dep-4', text: 'Systemd service for Uvicorn', status: 'pending', note: '4 workers, auto-restart' },
+        { id: 'dep-5', text: 'Database backup cron', status: 'pending', note: 'pg_dump harian' },
+        { id: 'dep-6', text: 'Cloudflare integration', status: 'pending', note: 'DNS + DDoS protection' },
+      ]
+    }
+  ];
+
+  function getStatusBadge(status) {
+    const map = {
+      'completed': 'bg-green-100 text-green-700',
+      'in_progress': 'bg-amber-100 text-amber-700',
+      'pending': 'bg-gray-100 text-gray-600',
+    };
+    const label = status === 'completed' ? 'Done' : status === 'in_progress' ? 'In Progress' : 'Pending';
+    const cls = map[status] || 'bg-gray-100 text-gray-600';
+    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + label + '</span>';
+  }
+
+  function renderChecklist() {
+    const container = document.getElementById('checklist-container');
+    let total = 0, completed = 0, inProgress = 0, pending = 0;
+
+    let html = '';
+    checklistData.forEach(function(category) {
+      html += '<div class="mb-6">';
+      html += '<h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">' + category.category + '</h3>';
+      html += '<div class="space-y-2">';
+
+      category.items.forEach(function(item) {
+        total++;
+        if (item.status === 'completed') completed++;
+        else if (item.status === 'in_progress') inProgress++;
+        else pending++;
+
+        const checked = item.status === 'completed' ? 'checked' : '';
+        const opacity = item.status === 'completed' ? 'opacity-60' : '';
+
+        html += '<div class="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 ' + opacity + '">';
+        html += '<input type="checkbox" ' + checked + ' disabled class="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300">';
+        html += '<div class="flex-1 min-w-0">';
+        html += '<div class="flex items-center gap-2 flex-wrap">';
+        html += '<p class="text-sm font-medium text-gray-800 ' + (item.status === 'completed' ? 'line-through' : '') + '">' + item.text + '</p>';
+        html += getStatusBadge(item.status);
+        html += '</div>';
+        if (item.note) {
+          html += '<p class="text-xs text-gray-500 mt-1">' + item.note + '</p>';
+        }
+        html += '</div>';
+        html += '</div>';
+      });
+
+      html += '</div></div>';
+    });
+
+    container.innerHTML = html;
+    document.getElementById('total-items').textContent = total;
+    document.getElementById('completed-items').textContent = completed;
+    document.getElementById('progress-items').textContent = inProgress;
+    document.getElementById('pending-items').textContent = pending;
+  }
+
+  window.toggleSidebar = function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const isOpen = sidebar.classList.contains('translate-x-0');
+
+    if (isOpen) {
+      sidebar.classList.remove('translate-x-0');
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    } else {
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+    }
+  };
+
+  renderChecklist();
+})();
+</script>
+{% endblock %}

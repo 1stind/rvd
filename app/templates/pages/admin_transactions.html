@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}Transactions - Web Voting Championship{% endblock %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-gray-100">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar"
+    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
+
+    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
+
+    <nav class="space-y-1 text-sm">
+      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
+      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
+      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Transactions</a>
+      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
+      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
+    </nav>
+
+  </aside>
+
+  <!-- OVERLAY -->
+  <div id="overlay"
+    onclick="toggleSidebar()"
+    class="fixed inset-0 bg-black/30 hidden md:hidden">
+  </div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR -->
+    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
+        <h1 class="text-lg font-semibold text-gray-800">Transactions</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
+        <span class="text-sm font-medium text-gray-700">Admin</span>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="p-6 space-y-6 overflow-y-auto">
+
+      <!-- LOADING STATE -->
+      <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
+        <p class="text-gray-400 text-sm">Memuat transaksi...</p>
+      </div>
+
+      <!-- TRANSACTIONS CONTENT (hidden until loaded) -->
+      <div id="transactions-content" class="hidden space-y-6">
+
+        <!-- FILTERS -->
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <h2 class="text-lg font-semibold text-gray-800">Semua Transaksi</h2>
+            <div class="flex flex-wrap gap-2">
+              <input type="text" id="search-query" placeholder="Cari invoice, nama, WA, team..." class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <select id="filter-status" onchange="loadTransactions()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">Semua Status</option>
+                <option value="SUCCESS">Success</option>
+                <option value="PENDING">Pending</option>
+                <option value="FAILED">Failed</option>
+                <option value="EXPIRED">Expired</option>
+                <option value="CANCELED">Canceled</option>
+              </select>
+              <select id="filter-event" onchange="loadTransactions()" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">Semua Event</option>
+              </select>
+              <button onclick="loadTransactions()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">Search</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRANSACTIONS TABLE -->
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500 border-b">
+                  <th class="px-6 py-3">Invoice</th>
+                  <th class="px-6 py-3">Event</th>
+                  <th class="px-6 py-3">Tim</th>
+                  <th class="px-6 py-3">Paket</th>
+                  <th class="px-6 py-3 text-right">Total</th>
+                  <th class="px-6 py-3 text-right">Vote</th>
+                  <th class="px-6 py-3">Status</th>
+                  <th class="px-6 py-3">Supporter</th>
+                  <th class="px-6 py-3">WA</th>
+                  <th class="px-6 py-3">Waktu</th>
+                  <th class="px-6 py-3">Bayar/Expired</th>
+                </tr>
+              </thead>
+              <tbody id="transactions-body">
+                <tr>
+                  <td colspan="11" class="px-6 py-8 text-center text-gray-400 text-sm">Belum ada transaksi.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ERROR STATE -->
+      <div id="error-state" class="hidden">
+        <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p class="text-red-600 text-sm" id="error-message">Gagal memuat transaksi</p>
+          <button onclick="loadTransactions()" class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const API_BASE = '/api/v1';
+  let allEvents = [];
+
+  function showId(el) {
+    const e = document.getElementById(el);
+    if (e) e.classList.remove('hidden');
+  }
+
+  function hideId(el) {
+    const e = document.getElementById(el);
+    if (e) e.classList.add('hidden');
+  }
+
+  async function api(path, options = {}) {
+    const token = localStorage.getItem('wvc_admin_token') || '';
+    const headers = Object.assign({
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+    }, options.headers || {});
+
+    const res = await fetch(API_BASE + path, Object.assign({ headers }, options));
+    if (res.status === 401) {
+      localStorage.removeItem('wvc_admin_token');
+      window.location.href = '/admin/login';
+      return null;
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json().catch(() => ({}));
+  }
+
+  function getStatusBadge(status) {
+    const map = {
+      'SUCCESS': 'bg-green-100 text-green-600',
+      'PENDING': 'bg-amber-100 text-amber-600',
+      'FAILED': 'bg-red-100 text-red-600',
+      'EXPIRED': 'bg-gray-100 text-gray-500',
+      'CANCELED': 'bg-gray-100 text-gray-500',
+      'SETTLED': 'bg-blue-100 text-blue-600',
+    };
+    const cls = map[status] || 'bg-gray-100 text-gray-600';
+    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + status + '</span>';
+  }
+
+  async function loadEvents() {
+    const data = await api('/events');
+    allEvents = data?.data || [];
+    const select = document.getElementById('filter-event');
+    select.innerHTML = '<option value="">Semua Event</option>' +
+      allEvents.map(function(ev) {
+        return '<option value="' + ev.id + '">' + ev.name + '</option>';
+      }).join('');
+  }
+
+  async function loadTransactions() {
+    hideId('error-state');
+    hideId('transactions-content');
+    showId('loading-state');
+
+    try {
+      const eventId = document.getElementById('filter-event').value;
+      const status = document.getElementById('filter-status').value;
+      const query = (document.getElementById('search-query').value || '').trim().toLowerCase();
+
+      let url = '/admin/payments';
+      const params = [];
+      if (eventId) params.push('event_id=' + encodeURIComponent(eventId));
+      if (status) params.push('status=' + encodeURIComponent(status));
+      if (params.length) url += '?' + params.join('&');
+
+      const data = await api(url);
+      if (!data || !data.success) {
+        throw new Error(data?.message || 'Gagal memuat transaksi');
+      }
+
+      let payments = data.data || [];
+      if (query) {
+        payments = payments.filter(function(p) {
+          return (p.id && p.id.toLowerCase().indexOf(query) !== -1) ||
+            (p.event_name && p.event_name.toLowerCase().indexOf(query) !== -1) ||
+            (p.team_name && p.team_name.toLowerCase().indexOf(query) !== -1) ||
+            (p.supporter_name && p.supporter_name.toLowerCase().indexOf(query) !== -1) ||
+            (p.supporter_phone && p.supporter_phone.toLowerCase().indexOf(query) !== -1);
+        });
+      }
+
+      const tbody = document.getElementById('transactions-body');
+
+      if (!payments.length) {
+        tbody.innerHTML = '<tr><td colspan="11" class="px-6 py-8 text-center text-gray-400 text-sm">Belum ada transaksi.</td></tr>';
+      } else {
+        tbody.innerHTML = payments.map(function(p) {
+          var statusClass = p.status === 'SUCCESS' ? 'text-green-600' : p.status === 'PENDING' ? 'text-amber-600' : p.status === 'FAILED' ? 'text-red-600' : 'text-gray-500';
+          var statusLabel = p.status === 'SUCCESS' ? 'Success' : p.status === 'PENDING' ? 'Pending' : p.status === 'FAILED' ? 'Failed' : p.status === 'EXPIRED' ? 'Expired' : p.status === 'CANCELED' ? 'Canceled' : p.status;
+          var timeInfo = '';
+          if (p.status === 'SUCCESS' && p.paid_at) {
+            timeInfo = new Date(p.paid_at).toLocaleString('id-ID');
+          } else if ((p.status === 'EXPIRED' || p.status === 'CANCELED') && p.expires_at) {
+            timeInfo = 'Exp: ' + new Date(p.expires_at).toLocaleString('id-ID');
+          } else {
+            timeInfo = p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '';
+          }
+          return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
+            '<td class="px-6 py-3 font-mono text-xs text-gray-500">' + (p.id || '') + '</td>' +
+            '<td class="px-6 py-3 text-gray-800">' + (p.event_name || p.event_id || '') + '</td>' +
+            '<td class="px-6 py-3 font-medium text-gray-800">' + (p.team_name || '') + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + (p.package || '') + '</td>' +
+            '<td class="px-6 py-3 text-right font-medium text-gray-800">Rp ' + (p.amount || 0).toLocaleString('id-ID') + '</td>' +
+            '<td class="px-6 py-3 text-right font-medium text-blue-600">' + (p.votes || 0) + '</td>' +
+            '<td class="px-6 py-3 ' + statusClass + ' font-medium">' + statusLabel + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + (p.supporter_name || '') + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + (p.supporter_phone || '') + '</td>' +
+            '<td class="px-6 py-3 text-xs text-gray-400">' + (p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '') + '</td>' +
+            '<td class="px-6 py-3 text-xs text-gray-400">' + timeInfo + '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      hideId('loading-state');
+      showId('transactions-content');
+    } catch (e) {
+      hideId('loading-state');
+      document.getElementById('error-message').textContent = 'Gagal memuat transaksi: ' + e.message;
+      showId('error-state');
+    }
+  }
+
+  window.toggleSidebar = function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const isOpen = sidebar.classList.contains('translate-x-0');
+
+    if (isOpen) {
+      sidebar.classList.remove('translate-x-0');
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    } else {
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+    }
+  };
+
+  loadEvents().then(function() {
+    return loadTransactions();
+  });
+})();
+</script>
+{% endblock %}

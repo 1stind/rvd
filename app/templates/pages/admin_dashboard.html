@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Admin - Web Voting Championship{% endblock %}
+
+{% block content %}
+<div class="flex h-screen overflow-hidden bg-gray-100">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar"
+    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
+
+    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
+
+    <nav class="space-y-1 text-sm">
+      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Dashboard</a>
+      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
+      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
+      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
+      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
+    </nav>
+
+  </aside>
+
+  <!-- OVERLAY -->
+  <div id="overlay"
+    onclick="toggleSidebar()"
+    class="fixed inset-0 bg-black/30 hidden md:hidden">
+  </div>
+
+  <!-- MAIN -->
+  <div class="flex-1 flex flex-col min-w-0">
+
+    <!-- TOPBAR -->
+    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
+        <h1 class="text-lg font-semibold text-gray-800">Dashboard</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
+        <span class="text-sm font-medium text-gray-700">Admin</span>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <main class="p-6 space-y-6 overflow-y-auto">
+
+      <!-- LOADING STATE -->
+      <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
+        <p class="text-gray-400 text-sm">Memuat dashboard...</p>
+      </div>
+
+      <!-- DASHBOARD CONTENT (hidden until loaded) -->
+      <div id="dashboard-content" class="hidden space-y-6">
+
+        <!-- EVENT SUMMARY -->
+        <div class="bg-white rounded-xl p-6 shadow-sm">
+          <div class="flex justify-between items-start">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-800" id="event-name"></h2>
+              <p class="text-sm text-gray-500">Active Event</p>
+            </div>
+            <span class="text-xs bg-green-100 text-green-600 px-3 py-1 rounded-full" id="event-status">
+              Active
+            </span>
+          </div>
+        </div>
+
+        <!-- STATS -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Total Vote</p>
+            <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-votes">0</h2>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Tim</p>
+            <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-teams">0</h2>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Transaksi Sukses</p>
+            <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-success">0</h2>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Total Dana (Rp)</p>
+            <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-amount">0</h2>
+          </div>
+        </div>
+
+        <!-- PAYMENT BREAKDOWN -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Pending</p>
+            <h2 class="text-2xl font-bold mt-1 text-amber-600" id="stat-pending">0</h2>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Failed</p>
+            <h2 class="text-2xl font-bold mt-1 text-red-600" id="stat-failed">0</h2>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Expired</p>
+            <h2 class="text-2xl font-bold mt-1 text-gray-500" id="stat-expired">0</h2>
+          </div>
+          <div class="bg-white p-4 rounded-xl shadow-sm">
+            <p class="text-sm text-gray-500">Canceled</p>
+            <h2 class="text-2xl font-bold mt-1 text-gray-500" id="stat-canceled">0</h2>
+          </div>
+        </div>
+
+        <!-- EXPORT ACTIONS -->
+        <div class="flex flex-wrap gap-3">
+          <a id="export-results" href="#" target="_blank"
+            class="px-5 py-2.5 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors text-sm font-medium">
+            Export Hasil (Excel)
+          </a>
+          <a id="export-payments" href="#" target="_blank"
+            class="px-5 py-2.5 rounded border border-gray-300 text-gray-600 hover:border-gray-400 transition-colors text-sm font-medium">
+            Export Transaksi (Excel)
+          </a>
+        </div>
+
+        <!-- TRANSACTION TABLE -->
+        <div class="bg-white rounded-xl shadow-sm p-6">
+          <h2 class="font-semibold mb-4 text-gray-800">Transaksi Terbaru</h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-gray-500 border-b">
+                  <th class="pb-2">Invoice</th>
+                  <th>Tim</th>
+                  <th>Paket</th>
+                  <th class="text-right">Total</th>
+                  <th class="text-right">Vote</th>
+                  <th>Status</th>
+                  <th>Waktu</th>
+                </tr>
+              </thead>
+              <tbody id="payments-body">
+                <tr>
+                  <td colspan="7" class="py-8 text-center text-gray-400 text-sm">Belum ada transaksi.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ERROR STATE -->
+      <div id="error-state" class="hidden">
+        <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+          <p class="text-red-600 text-sm" id="error-message">Gagal memuat dashboard</p>
+          <button onclick="loadDashboard()" class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700">
+            Coba Lagi
+          </button>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+  const TOKEN_KEY = 'wvc_admin_token';
+  const API_BASE = '/api/v1';
+
+  function getToken() {
+    return localStorage.getItem(TOKEN_KEY) || '';
+  }
+
+  function setToken(token) {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  }
+
+  async function api(path, options = {}) {
+    const token = getToken();
+    const headers = Object.assign({
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+    }, options.headers || {});
+    const res = await fetch(API_BASE + path, Object.assign({ headers }, options));
+    if (res.status === 401) {
+      setToken('');
+      window.location.href = '/admin/login';
+      return;
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json().catch(() => ({}));
+  }
+
+  function showId(el) {
+    const e = document.getElementById(el);
+    if (e) e.classList.remove('hidden');
+  }
+
+  function hideId(el) {
+    const e = document.getElementById(el);
+    if (e) e.classList.add('hidden');
+  }
+
+  async function loadDashboard() {
+    hideId('error-state');
+    showId('loading-state');
+    hideId('dashboard-content');
+
+    try {
+      const [me, stats, payments] = await Promise.all([
+        api('/auth/admin/me'),
+        api('/admin/dashboard'),
+        api('/admin/payments'),
+      ]);
+
+      if (!me || !stats) {
+        throw new Error('Gagal memuat data dashboard');
+      }
+
+      // Update event summary
+      const eventName = stats.data?.event_name || '';
+      document.getElementById('event-name').textContent = eventName || ('Event ' + (stats.data?.current_event_id || ''));
+      const eventStatus = stats.data?.event_status || '';
+      document.getElementById('event-status').textContent = eventStatus || 'Active';
+      const statusClass = eventStatus === 'VOTING_OPEN' ? 'bg-green-100 text-green-600' :
+        eventStatus === 'VOTING_CLOSED' ? 'bg-amber-100 text-amber-600' :
+        eventStatus === 'DRAFT' ? 'bg-gray-100 text-gray-600' :
+        'bg-green-100 text-green-600';
+      document.getElementById('event-status').className = 'text-xs ' + statusClass + ' px-3 py-1 rounded-full';
+
+      // Update stats
+      document.getElementById('stat-votes').textContent = (stats.data?.votes || 0).toLocaleString('id-ID');
+      document.getElementById('stat-teams').textContent = (stats.data?.teams || 0).toLocaleString('id-ID');
+      document.getElementById('stat-success').textContent = (stats.data?.successful_payments || 0).toLocaleString('id-ID');
+      document.getElementById('stat-amount').textContent = (stats.data?.total_amount || 0).toLocaleString('id-ID');
+      document.getElementById('stat-pending').textContent = (stats.data?.pending_payments || 0).toLocaleString('id-ID');
+      document.getElementById('stat-failed').textContent = (stats.data?.failed_payments || 0).toLocaleString('id-ID');
+      document.getElementById('stat-expired').textContent = (stats.data?.expired_payments || 0).toLocaleString('id-ID');
+      document.getElementById('stat-canceled').textContent = (stats.data?.canceled_payments || 0).toLocaleString('id-ID');
+
+      // Update export links
+      const eventId = stats.data?.current_event_id || '';
+      document.getElementById('export-results').href = '/api/v1/admin/exports/results?event_id=' + eventId;
+      document.getElementById('export-payments').href = '/api/v1/admin/exports/payments?event_id=' + eventId;
+
+      // Update payments table
+      const tbody = document.getElementById('payments-body');
+      const list = payments.data || [];
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400 text-sm">Belum ada transaksi.</td></tr>';
+      } else {
+        tbody.innerHTML = list.map(function(p) {
+          var statusClass = p.status === 'SUCCESS' ? 'text-green-600' : p.status === 'PENDING' ? 'text-amber-600' : 'text-gray-500';
+          var statusLabel = p.status === 'SUCCESS' ? 'Success' : p.status === 'PENDING' ? 'Pending' : p.status;
+          return '<tr class="border-b last:border-0">' +
+            '<td class="py-3 font-mono text-xs text-gray-500">' + p.id + '</td>' +
+            '<td class="py-3 font-medium text-gray-800">' + (p.team_name || '') + '</td>' +
+            '<td class="py-3 text-gray-500">' + (p.package || '') + '</td>' +
+            '<td class="py-3 text-right font-medium text-gray-800">Rp ' + (p.amount || 0).toLocaleString('id-ID') + '</td>' +
+            '<td class="py-3 text-right font-medium text-blue-600">' + (p.votes || 0) + '</td>' +
+            '<td class="py-3 ' + statusClass + ' font-medium">' + statusLabel + '</td>' +
+            '<td class="py-3 text-xs text-gray-400">' + (p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '') + '</td>' +
+          '</tr>';
+        }).join('');
+      }
+
+      hideId('loading-state');
+      showId('dashboard-content');
+    } catch (e) {
+      hideId('loading-state');
+      document.getElementById('error-message').textContent = 'Gagal memuat dashboard: ' + e.message;
+      showId('error-state');
+    }
+  }
+
+  window.logout = function() {
+    setToken('');
+    window.location.href = '/admin/login';
+  };
+
+  // SIDEBAR TOGGLE
+  window.toggleSidebar = function() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('overlay');
+    const isOpen = sidebar.classList.contains('translate-x-0');
+
+    if (isOpen) {
+      sidebar.classList.remove('translate-x-0');
+      sidebar.classList.add('-translate-x-full');
+      overlay.classList.add('hidden');
+    } else {
+      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.add('translate-x-0');
+      overlay.classList.remove('hidden');
+    }
+  };
+
+  loadDashboard();
+})();
+</script>
+{% endblock %}
