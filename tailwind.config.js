@@ -1,0 +1,22 @@
+// Production Tailwind build (scripts/build_css.sh). Keep `theme` in sync with the
+// inline CDN config in app/templates/base.html, which is still used in dev.
+module.exports = {
+  content: [
+    './app/templates/**/*.html',
+    './app/static/js/**/!(alpine*).js',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        navy: { DEFAULT: '#0B1D3A', 800: '#122A52', 700: '#173568' },
+        brand: { DEFAULT: '#1D4ED8', bright: '#173568', 50: '#EEF3FF' },
+        medal: { gold: '#D4AF37', silver: '#94A3B8', bronze: '#B26339' },
+      },
+      fontFamily: {
+        display: ['"Plus Jakarta Sans"', 'sans-serif'],
+        score: ['"Plus Jakarta Sans"', 'sans-serif'],
+        body: ['"Plus Jakarta Sans"', 'sans-serif'],
+      },
+    },
+  },
+};

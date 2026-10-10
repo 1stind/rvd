@@ -1,4 +1,23 @@
-function landingPage(event) {
+function landingPage(events = []) {
+  return {
+    events,
+    query: '',
+    openOnly: false,
+    get filteredEvents() {
+      const query = this.query.trim().toLocaleLowerCase('id-ID');
+      return this.events.filter(event => (!this.openOnly || event.is_voting_open)
+        && event.name.toLocaleLowerCase('id-ID').includes(query));
+    },
+    dateMonth(event) {
+      return event.opens_at ? new Date(event.opens_at).toLocaleDateString('id-ID', { month: 'short' }) : 'Event';
+    },
+    dateDay(event) {
+      return event.opens_at ? new Date(event.opens_at).toLocaleDateString('id-ID', { day: '2-digit' }) : 'RVD';
+    },
+  };
+}
+
+function eventCountdown(event) {
   return {
     event: event || null,
     countdown: {
@@ -16,6 +35,8 @@ function landingPage(event) {
       }
       this._startCountdown();
     },
+
+    destroy() { clearInterval(this._countdownTimer); },
 
     _startCountdown() {
       if (this._countdownTimer) {

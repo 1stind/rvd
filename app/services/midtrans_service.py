@@ -6,6 +6,20 @@ import hmac
 from typing import Any
 
 
+HTTP_TIMEOUT_SECONDS = 10
+
+
+class _RequestsWithTimeout:
+    """midtransclient calls `requests.request` with no timeout; a stalled
+    connection would pin a worker thread forever."""
+
+    def request(self, *args, **kwargs):
+        import requests
+
+        kwargs.setdefault("timeout", HTTP_TIMEOUT_SECONDS)
+        return requests.request(*args, **kwargs)
+
+
 def create_transaction(payment, server_key: str, is_production: bool) -> dict:
     import midtransclient
 
@@ -13,6 +27,7 @@ def create_transaction(payment, server_key: str, is_production: bool) -> dict:
         is_production=is_production,
         server_key=server_key,
     )
+    client.http_client.http_client = _RequestsWithTimeout()
     return client.create_transaction(
         {
             "transaction_details": {
@@ -32,14 +47,17 @@ def create_transaction(payment, server_key: str, is_production: bool) -> dict:
 
 
 def verify_signature(payload: dict, raw_body: bytes, server_key: str) -> bool:
+    # Fail closed. Mock mode (no key) is decided by payment_service, not here.
     if not server_key:
-        return True
+        return False
     order_id = payload.get("order_id", "")
     status_code = str(payload.get("status_code", ""))
     gross_amount = str(payload.get("gross_amount", ""))
     expected = hashlib.sha512(f"{order_id}{status_code}{gross_amount}{server_key}".encode()).hexdigest()
-    got = payload.get("signature_key", "")
-    return hmac.compare_digest(expected, got)
+    got = payload.get("signature_key")
+    if not isinstance(got, str):
+        return False
+    return hmac.compare_digest(expected.encode(), got.encode())
 
 
 def parse_notification(payload: dict) -> dict:

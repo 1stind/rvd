@@ -20,7 +20,7 @@ class VoteLog(TimestampMixin, UUIDMixin, Base):
         String(40), primary_key=True, default=lambda: new_id("vlog")
     )
     payment_id: Mapped[str] = mapped_column(
-        ForeignKey("payments.id", ondelete="RESTRICT"), nullable=False, index=True
+        ForeignKey("payments.id", ondelete="RESTRICT"), nullable=False, index=True, unique=True
     )
     team_id: Mapped[str] = mapped_column(
         ForeignKey("teams.id", ondelete="RESTRICT"), nullable=False, index=True

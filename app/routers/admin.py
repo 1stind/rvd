@@ -39,9 +39,14 @@ async def dashboard(
         return ok({"events": 0, "teams": 0, "payments": 0, "votes": 0, "users": 0})
 
     target_id = event_id or (events[0].id if events else None)
-    payments = await payment_repo.list_payments(session, event_id=target_id, limit=10000)
-    success_count = sum(1 for p in payments if p.status == PaymentStatus.SUCCESS)
-    total_amount = sum(p.amount for p in payments if p.status == PaymentStatus.SUCCESS)
+    # One GROUP BY instead of loading every payment row (with JSON payloads).
+    summary = await payment_repo.status_summary(session, target_id)
+
+    def count(status: PaymentStatus) -> int:
+        return summary.get(status, (0, 0))[0]
+
+    success_count = count(PaymentStatus.SUCCESS)
+    total_amount = summary.get(PaymentStatus.SUCCESS, (0, 0))[1]
     total_votes = await vote_log_repo.get_total_votes(session, event_id=target_id)
     users = await user_repo.list_users(session)
 
@@ -51,7 +56,7 @@ async def dashboard(
         {
             "events": len(events),
             "teams": len(await team_repo.list_teams(session, target_id)) if target_id else 0,
-            "payments": len(payments),
+            "payments": sum(c for c, _ in summary.values()),
             "successful_payments": success_count,
             "total_amount": total_amount,
             "votes": total_votes,
@@ -59,10 +64,10 @@ async def dashboard(
             "current_event_id": target_id,
             "event_name": target_event.name if target_event else None,
             "event_status": target_event.status.value if target_event else None,
-            "pending_payments": sum(1 for p in payments if p.status == PaymentStatus.PENDING),
-            "failed_payments": sum(1 for p in payments if p.status == PaymentStatus.FAILED),
-            "expired_payments": sum(1 for p in payments if p.status == PaymentStatus.EXPIRED),
-            "canceled_payments": sum(1 for p in payments if p.status == PaymentStatus.CANCELED),
+            "pending_payments": count(PaymentStatus.PENDING),
+            "failed_payments": count(PaymentStatus.FAILED),
+            "expired_payments": count(PaymentStatus.EXPIRED),
+            "canceled_payments": count(PaymentStatus.CANCELED),
         }
     )
 
@@ -164,7 +169,7 @@ async def update_settings(request: Request, session: AsyncSession = Depends(get_
         if key in body:
             await system_settings_repo.set(session, key, str(body[key]))
     await session.commit()
-    return ok(message="Settings updated")
+    return ok(message="Pengaturan berhasil disimpan")
 
 
 @router.put("/settings/system")
@@ -176,7 +181,7 @@ async def update_system_settings(request: Request, session: AsyncSession = Depen
         if key in body:
             await system_settings_repo.set(session, key, str(body[key]))
     await session.commit()
-    return ok(message="System settings updated")
+    return ok(message="Konfigurasi berhasil disimpan")
 
 
 @router.get("/exports/results")

@@ -1,49 +1,8 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% block title %}Leaderboard Admin - Web Voting Championship{% endblock %}
 
-{% block content %}
-<div class="flex h-screen overflow-hidden bg-gray-100">
-
-  <!-- SIDEBAR -->
-  <aside id="sidebar"
-    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
-
-    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
-
-    <nav class="space-y-1 text-sm">
-      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
-      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
-      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
-      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
-      <a href="/admin/leaderboard" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Leaderboard</a>
-      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
-    </nav>
-
-  </aside>
-
-  <!-- OVERLAY -->
-  <div id="overlay"
-    onclick="toggleSidebar()"
-    class="fixed inset-0 bg-black/30 hidden md:hidden">
-  </div>
-
-  <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-
-    <!-- TOPBAR -->
-    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
-        <h1 class="text-lg font-semibold text-gray-800">Leaderboard</h1>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
-        <span class="text-sm font-medium text-gray-700">Admin</span>
-      </div>
-    </header>
-
-    <!-- CONTENT -->
-    <main class="p-6 space-y-6 overflow-y-auto">
+{% from "macros/public.html" import podium %}
+{% block admin_content %}
 
       <!-- LOADING STATE -->
       <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
@@ -66,6 +25,13 @@
           </div>
         </div>
 
+        {% if leaderboard %}
+        <div class="award-stage admin-podium" x-data='{{ {"teams": leaderboard} | tojson }}'>
+          <div class="stage-heading"><span class="eyebrow">{{ icon('trophy') }} IN THE SPOTLIGHT</span><h2>Tiga posisi <em>terdepan.</em></h2></div>
+          {{ podium('teams') }}
+          <div class="stage-footer">Peringkat sementara · bukan pengumuman pemenang</div>
+        </div>
+        {% endif %}
         <!-- LEADERBOARD TABLE -->
         <div class="bg-white rounded-xl shadow-sm overflow-hidden">
           <div class="overflow-x-auto">
@@ -101,15 +67,14 @@
         </div>
       </div>
 
-    </main>
 
-  </div>
-</div>
 {% endblock %}
+
 
 {% block scripts %}
 <script>
 (function() {
+  const esc = window.adminEscapeHTML;
   const API_BASE = '/api/v1';
   let eventId = null;
 
@@ -161,28 +126,36 @@
     showId('loading-state');
 
     try {
-      const data = await api('/leaderboard');
+      const selectedEvent = {{ event | tojson }};
+      if (!selectedEvent) {
+        document.getElementById('event-name').textContent = 'Belum ada event';
+        document.getElementById('leaderboard-body').innerHTML = '<tr><td colspan="6">Tambahkan event untuk melihat peringkat.</td></tr>';
+        hideId('loading-state');
+        showId('leaderboard-content');
+        return;
+      }
+      const data = await api('/leaderboard?event_id=' + encodeURIComponent(selectedEvent.id));
       if (!data || !data.success) {
-        throw new Error(data?.message || 'Gagal memuat leaderboard');
+        throw new Error(data?.message || 'Gagal memuat peringkat');
       }
 
       const payload = data.data || {};
       const entries = payload.entries || [];
       eventId = payload.event_id;
 
-      document.getElementById('event-name').textContent = payload.event_name || ('Event ' + (eventId || ''));
+      document.getElementById('event-name').textContent = selectedEvent.name;
 
       const tbody = document.getElementById('leaderboard-body');
       if (!entries.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-400 text-sm">Belum ada data leaderboard.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-gray-400 text-sm">Belum ada data peringkat.</td></tr>';
       } else {
         tbody.innerHTML = entries.map(function(entry) {
           return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
-            '<td class="px-6 py-3 font-bold text-gray-800">#' + (entry.rank || '') + '</td>' +
-            '<td class="px-6 py-3 font-medium text-gray-800">' + (entry.name || '') + '</td>' +
-            '<td class="px-6 py-3 text-gray-500">' + (entry.school || '') + '</td>' +
-            '<td class="px-6 py-3 text-right font-semibold text-navy">' + (entry.votes || 0).toLocaleString('id-ID') + '</td>' +
-            '<td class="px-6 py-3 text-right text-gray-500">' + (entry.supporter_count || 0).toLocaleString('id-ID') + '</td>' +
+            '<td class="px-6 py-3 font-bold text-gray-800">#' + esc(entry.rank) + '</td>' +
+            '<td class="px-6 py-3 font-medium text-gray-800">' + esc(entry.name) + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + esc(entry.school) + '</td>' +
+            '<td class="px-6 py-3 text-right font-semibold text-navy">' + esc((entry.votes || 0).toLocaleString('id-ID')) + '</td>' +
+            '<td class="px-6 py-3 text-right text-gray-500">' + esc((entry.supporter_count || 0).toLocaleString('id-ID')) + '</td>' +
             '<td class="px-6 py-3 text-center">' + getTrendIcon(entry.trend) + '</td>' +
           '</tr>';
         }).join('');
@@ -192,27 +165,13 @@
       showId('leaderboard-content');
     } catch (e) {
       hideId('loading-state');
-      document.getElementById('error-message').textContent = 'Gagal memuat leaderboard: ' + e.message;
+      document.getElementById('error-message').textContent = 'Gagal memuat peringkat: ' + e.message;
       showId('error-state');
     }
   }
 
-  window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const isOpen = sidebar.classList.contains('translate-x-0');
 
-    if (isOpen) {
-      sidebar.classList.remove('translate-x-0');
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    } else {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      overlay.classList.remove('hidden');
-    }
-  };
-
+  window.loadLeaderboard = loadLeaderboard;
   loadLeaderboard();
 })();
 </script>

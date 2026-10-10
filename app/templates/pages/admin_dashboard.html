@@ -1,48 +1,7 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% block title %}Dashboard Admin - Web Voting Championship{% endblock %}
 
-{% block content %}
-<div class="flex h-screen overflow-hidden bg-gray-100">
-
-  <!-- SIDEBAR -->
-  <aside id="sidebar"
-    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
-
-    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
-
-    <nav class="space-y-1 text-sm">
-      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Dashboard</a>
-      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
-      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
-      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
-      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
-    </nav>
-
-  </aside>
-
-  <!-- OVERLAY -->
-  <div id="overlay"
-    onclick="toggleSidebar()"
-    class="fixed inset-0 bg-black/30 hidden md:hidden">
-  </div>
-
-  <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-
-    <!-- TOPBAR -->
-    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
-        <h1 class="text-lg font-semibold text-gray-800">Dashboard</h1>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
-        <span class="text-sm font-medium text-gray-700">Admin</span>
-      </div>
-    </header>
-
-    <!-- CONTENT -->
-    <main class="p-6 space-y-6 overflow-y-auto">
+{% block admin_content %}
 
       <!-- LOADING STATE -->
       <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
@@ -53,9 +12,10 @@
       <div id="dashboard-content" class="hidden space-y-6">
 
         <!-- EVENT SUMMARY -->
-        <div class="bg-white rounded-xl p-6 shadow-sm">
+        <div class="admin-event-summary bg-white rounded-xl p-6 shadow-sm">
           <div class="flex justify-between items-start">
             <div>
+              <span class="eyebrow">EVENT OVERVIEW</span>
               <h2 class="text-lg font-semibold text-gray-800" id="event-name"></h2>
               <p class="text-sm text-gray-500">Active Event</p>
             </div>
@@ -67,26 +27,30 @@
 
         <!-- STATS -->
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div class="bg-white p-4 rounded-xl shadow-sm">
+          <div class="stat-card bg-white p-4 rounded-xl shadow-sm">
+            <span class="stat-icon">{{ icon('star') }}</span>
             <p class="text-sm text-gray-500">Total Vote</p>
             <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-votes">0</h2>
           </div>
-          <div class="bg-white p-4 rounded-xl shadow-sm">
-            <p class="text-sm text-gray-500">Tim</p>
+          <div class="stat-card bg-white p-4 rounded-xl shadow-sm">
+            <span class="stat-icon">{{ icon('users') }}</span>
+            <p class="text-sm text-gray-500">Peserta</p>
             <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-teams">0</h2>
           </div>
-          <div class="bg-white p-4 rounded-xl shadow-sm">
+          <div class="stat-card bg-white p-4 rounded-xl shadow-sm">
+            <span class="stat-icon">{{ icon('check') }}</span>
             <p class="text-sm text-gray-500">Transaksi Sukses</p>
             <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-success">0</h2>
           </div>
-          <div class="bg-white p-4 rounded-xl shadow-sm">
+          <div class="stat-card bg-white p-4 rounded-xl shadow-sm">
+            <span class="stat-icon">{{ icon('wallet') }}</span>
             <p class="text-sm text-gray-500">Total Dana (Rp)</p>
             <h2 class="text-2xl font-bold mt-1 text-gray-800" id="stat-amount">0</h2>
           </div>
         </div>
 
         <!-- PAYMENT BREAKDOWN -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="dashboard-payment-status grid grid-cols-2 md:grid-cols-4 gap-4">
           <div class="bg-white p-4 rounded-xl shadow-sm">
             <p class="text-sm text-gray-500">Pending</p>
             <h2 class="text-2xl font-bold mt-1 text-amber-600" id="stat-pending">0</h2>
@@ -125,7 +89,7 @@
               <thead>
                 <tr class="text-left text-gray-500 border-b">
                   <th class="pb-2">Invoice</th>
-                  <th>Tim</th>
+                  <th>Peserta</th>
                   <th>Paket</th>
                   <th class="text-right">Total</th>
                   <th class="text-right">Vote</th>
@@ -154,15 +118,14 @@
         </div>
       </div>
 
-    </main>
 
-  </div>
-</div>
 {% endblock %}
+
 
 {% block scripts %}
 <script>
 (function() {
+  const esc = window.adminEscapeHTML;
   const TOKEN_KEY = 'wvc_admin_token';
   const API_BASE = '/api/v1';
 
@@ -219,9 +182,10 @@
 
       // Update event summary
       const eventName = stats.data?.event_name || '';
-      document.getElementById('event-name').textContent = eventName || ('Event ' + (stats.data?.current_event_id || ''));
+      document.getElementById('event-name').textContent = eventName || 'Belum ada event';
       const eventStatus = stats.data?.event_status || '';
-      document.getElementById('event-status').textContent = eventStatus || 'Active';
+      const eventStatusLabels = {DRAFT: 'Draf', PUBLISHED: 'Terbit', VOTING_OPEN: 'Voting dibuka', VOTING_CLOSED: 'Voting ditutup', FINISHED: 'Selesai', ARCHIVED: 'Diarsipkan'};
+      document.getElementById('event-status').textContent = eventStatusLabels[eventStatus] || eventStatus || 'Belum tersedia';
       const statusClass = eventStatus === 'VOTING_OPEN' ? 'bg-green-100 text-green-600' :
         eventStatus === 'VOTING_CLOSED' ? 'bg-amber-100 text-amber-600' :
         eventStatus === 'DRAFT' ? 'bg-gray-100 text-gray-600' :
@@ -251,14 +215,14 @@
       } else {
         tbody.innerHTML = list.map(function(p) {
           var statusClass = p.status === 'SUCCESS' ? 'text-green-600' : p.status === 'PENDING' ? 'text-amber-600' : 'text-gray-500';
-          var statusLabel = p.status === 'SUCCESS' ? 'Success' : p.status === 'PENDING' ? 'Pending' : p.status;
+          var statusLabel = p.status === 'SUCCESS' ? 'Berhasil' : p.status === 'PENDING' ? 'Menunggu' : p.status;
           return '<tr class="border-b last:border-0">' +
-            '<td class="py-3 font-mono text-xs text-gray-500">' + p.id + '</td>' +
-            '<td class="py-3 font-medium text-gray-800">' + (p.team_name || '') + '</td>' +
-            '<td class="py-3 text-gray-500">' + (p.package || '') + '</td>' +
-            '<td class="py-3 text-right font-medium text-gray-800">Rp ' + (p.amount || 0).toLocaleString('id-ID') + '</td>' +
-            '<td class="py-3 text-right font-medium text-blue-600">' + (p.votes || 0) + '</td>' +
-            '<td class="py-3 ' + statusClass + ' font-medium">' + statusLabel + '</td>' +
+            '<td class="py-3 font-mono text-xs text-gray-500">' + esc(p.id) + '</td>' +
+            '<td class="py-3 font-medium text-gray-800">' + esc(p.team_name) + '</td>' +
+            '<td class="py-3 text-gray-500">' + esc(p.package) + '</td>' +
+            '<td class="py-3 text-right font-medium text-gray-800">Rp ' + esc((p.amount || 0).toLocaleString('id-ID')) + '</td>' +
+            '<td class="py-3 text-right font-medium text-blue-600">' + esc(p.votes || 0) + '</td>' +
+            '<td class="py-3 ' + statusClass + ' font-medium">' + esc(statusLabel) + '</td>' +
             '<td class="py-3 text-xs text-gray-400">' + (p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '') + '</td>' +
           '</tr>';
         }).join('');
@@ -268,7 +232,7 @@
       showId('dashboard-content');
     } catch (e) {
       hideId('loading-state');
-      document.getElementById('error-message').textContent = 'Gagal memuat dashboard: ' + e.message;
+      document.getElementById('error-message').textContent = 'Gagal memuat ringkasan: ' + e.message;
       showId('error-state');
     }
   }
@@ -279,22 +243,8 @@
   };
 
   // SIDEBAR TOGGLE
-  window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const isOpen = sidebar.classList.contains('translate-x-0');
 
-    if (isOpen) {
-      sidebar.classList.remove('translate-x-0');
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    } else {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      overlay.classList.remove('hidden');
-    }
-  };
-
+  window.loadDashboard = loadDashboard;
   loadDashboard();
 })();
 </script>

@@ -2,6 +2,7 @@
 Events & teams API — public read + admin CRUD.
 Business logic lives in services; queries in repositories.
 """
+import json
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -15,8 +16,8 @@ from app.routers.deps import AdminUserJwt, DbSession
 from app.schemas.common import ok
 from app.schemas.event import EventCreate, EventOut, EventUpdate
 from app.schemas.team import TeamCreate, TeamOut, TeamUpdate, TeamWithVotes
-from app.services import event_service
-from app.services import cache
+from app.services import cache, event_service, leaderboard_service
+from app.utils import dumps
 
 router = APIRouter(prefix="/api/v1", tags=["events"])
 
@@ -24,12 +25,12 @@ router = APIRouter(prefix="/api/v1", tags=["events"])
 def _event_out(event) -> dict:
     data = EventOut.model_validate(event).model_dump()
     data["status_label"] = {
-        EventStatus.DRAFT: "Draft",
-        EventStatus.PUBLISHED: "Published",
-        EventStatus.VOTING_OPEN: "Voting Open",
-        EventStatus.VOTING_CLOSED: "Voting Closed",
-        EventStatus.FINISHED: "Finished",
-        EventStatus.ARCHIVED: "Archived",
+        EventStatus.DRAFT: "Draf",
+        EventStatus.PUBLISHED: "Terbit",
+        EventStatus.VOTING_OPEN: "Voting dibuka",
+        EventStatus.VOTING_CLOSED: "Voting ditutup",
+        EventStatus.FINISHED: "Selesai",
+        EventStatus.ARCHIVED: "Diarsipkan",
     }.get(event.status, event.status.value)
     return data
 
@@ -68,8 +69,13 @@ async def list_donors(
     event_id: str,
     session: AsyncSession = Depends(get_db),
 ):
+    key = f"wvc:donors:{event_id}"
+    cached = await cache.cache_get(key)
+    if cached:
+        return ok(json.loads(cached))
     await event_service.get_event_or_404(session, event_id)
     payload = await event_service.build_donors(session, event_id)
+    await cache.cache_set(key, dumps(payload))
     return ok(payload)
 
 
@@ -79,17 +85,17 @@ async def leaderboard(
     limit: int = Query(default=100, ge=1, le=500),
     session: AsyncSession = Depends(get_db),
 ):
-    event = await event_service.get_event_or_404(session, event_id)
-
-    cached = await cache.get_cached_leaderboard(event_id, limit)
-    if cached:
-        cached["updated_at"] = datetime.now(timezone.utc).isoformat()
-        return ok(cached)
-
-    payload = await event_service.build_leaderboard(session, event_id, limit=limit)
-    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await cache.set_cached_leaderboard(event_id, payload, limit)
-    return ok(payload)
+    # One cache entry per event holding the full ranking; `limit` only trims the
+    # response. A warm cache answers without touching the database.
+    payload = await cache.get_cached_leaderboard(event_id)
+    if not payload:
+        await event_service.get_event_or_404(session, event_id)
+        payload = await leaderboard_service.get_leaderboard(session, event_id)
+    return ok({
+        **payload,
+        "entries": payload["entries"][:limit],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
 
 
 # --- Admin CRUD ------------------------------------------------------------

@@ -30,6 +30,8 @@ class Team(TimestampMixin, SoftDeleteMixin, UUIDMixin, Base):
     total_votes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     supporter_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     current_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Rank before the latest vote; current_rank vs previous_rank is the trend arrow.
+    previous_rank: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     event: Mapped["Event"] = relationship(back_populates="teams")  # noqa: F821

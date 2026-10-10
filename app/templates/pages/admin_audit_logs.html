@@ -1,48 +1,7 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% block title %}Audit Logs - Web Voting Championship{% endblock %}
 
-{% block content %}
-<div class="flex h-screen overflow-hidden bg-gray-100">
-
-  <!-- SIDEBAR -->
-  <aside id="sidebar"
-    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
-
-    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
-
-    <nav class="space-y-1 text-sm">
-      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
-      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
-      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
-      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Audit Logs</a>
-      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
-    </nav>
-
-  </aside>
-
-  <!-- OVERLAY -->
-  <div id="overlay"
-    onclick="toggleSidebar()"
-    class="fixed inset-0 bg-black/30 hidden md:hidden">
-  </div>
-
-  <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-
-    <!-- TOPBAR -->
-    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
-        <h1 class="text-lg font-semibold text-gray-800">Audit Logs</h1>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
-        <span class="text-sm font-medium text-gray-700">Admin</span>
-      </div>
-    </header>
-
-    <!-- CONTENT -->
-    <main class="p-6 space-y-6 overflow-y-auto">
+{% block admin_content %}
 
       <!-- LOADING STATE -->
       <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
@@ -95,15 +54,14 @@
         </div>
       </div>
 
-    </main>
 
-  </div>
-</div>
 {% endblock %}
+
 
 {% block scripts %}
 <script>
 (function() {
+  const esc = window.adminEscapeHTML;
   const API_BASE = '/api/v1';
 
   function showId(el) {
@@ -135,15 +93,15 @@
 
   function getActionLabel(action) {
     const map = {
-      'event.create': 'Membuat Event',
-      'event.update': 'Mengubah Event',
-      'event.delete': 'Menghapus Event',
-      'team.create': 'Membuat Tim',
-      'team.update': 'Mengubah Tim',
-      'team.delete': 'Menghapus Tim',
-      'payment.create': 'Membuat Pembayaran',
-      'admin.login': 'Login Admin',
-      'admin.logout': 'Logout Admin',
+      'event.create': 'membuat event',
+      'event.update': 'mengubah event',
+      'event.delete': 'menghapus event',
+      'team.create': 'membuat peserta',
+      'team.update': 'mengubah peserta',
+      'team.delete': 'menghapus peserta',
+      'payment.create': 'membuat pembayaran',
+      'admin.login': 'masuk sebagai admin',
+      'admin.logout': 'keluar dari admin',
     };
     return map[action] || action;
   }
@@ -167,28 +125,26 @@
 
       const data = await api(url);
       if (!data || !data.success) {
-        throw new Error(data?.message || 'Gagal memuat audit logs');
+        throw new Error(data?.message || 'Gagal memuat log aktivitas');
       }
 
       const logs = data.data || [];
       const container = document.getElementById('audit-logs-list');
 
       if (!logs.length) {
-        container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Belum ada audit logs.</p>';
+        container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">Belum ada log aktivitas.</p>';
       } else {
         container.innerHTML = logs.map(function(log) {
           const time = log.created_at ? new Date(log.created_at).toLocaleString('id-ID') : '';
           const actor = log.actor_name || (log.actor_type ? log.actor_type.toLowerCase() : 'system');
           const detailStr = log.detail ? JSON.stringify(log.detail) : '';
-          return '<div class="flex items-start gap-4 pb-4 border-b last:border-0 last:pb-0">' +
-            '<div class="w-2 h-2 mt-2 rounded-full bg-blue-500 flex-shrink-0"></div>' +
-            '<div class="flex-1 min-w-0">' +
-              '<p class="text-sm text-gray-800">' + actor + ' ' + getActionLabel(log.action) + '</p>' +
-              (log.entity_type ? '<p class="text-xs text-gray-500 mt-1">Entity: ' + log.entity_type + (log.entity_id ? ' (' + log.entity_id + ')' : '') + '</p>' : '') +
-              (detailStr ? '<p class="text-xs text-gray-400 mt-1">' + detailStr + '</p>' : '') +
-              (log.ip_address ? '<p class="text-xs text-gray-400 mt-1">IP: ' + log.ip_address + '</p>' : '') +
-              '<p class="text-xs text-gray-400 mt-1">' + time + '</p>' +
-            '</div>' +
+          return '<div class="admin-audit-record">' +
+            '<div>' +
+              '<h3>' + esc(actor) + ' ' + esc(getActionLabel(log.action)) + '</h3>' +
+              (log.entity_type ? '<p class="text-xs text-gray-500 mt-1">Objek: ' + esc(log.entity_type) + (log.entity_id ? ' (' + esc(log.entity_id) + ')' : '') + '</p>' : '') +
+              (detailStr ? '<details><summary>Lihat rincian</summary><p>' + esc(detailStr) + '</p></details>' : '') +
+              (log.ip_address ? '<p class="text-xs text-gray-400 mt-1">IP: ' + esc(log.ip_address) + '</p>' : '') +
+            '</div><time>' + time + '</time>' +
           '</div>';
         }).join('');
       }
@@ -197,27 +153,13 @@
       showId('audit-logs-content');
     } catch (e) {
       hideId('loading-state');
-      document.getElementById('error-message').textContent = 'Gagal memuat audit logs: ' + e.message;
+      document.getElementById('error-message').textContent = 'Gagal memuat log aktivitas: ' + e.message;
       showId('error-state');
     }
   }
 
-  window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const isOpen = sidebar.classList.contains('translate-x-0');
 
-    if (isOpen) {
-      sidebar.classList.remove('translate-x-0');
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    } else {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      overlay.classList.remove('hidden');
-    }
-  };
-
+  window.loadAuditLogs = loadAuditLogs;
   loadAuditLogs();
 })();
 </script>

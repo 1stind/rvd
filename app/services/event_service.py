@@ -58,36 +58,32 @@ async def build_donors(session: AsyncSession, event_id: str) -> dict:
     from app.repositories import payment as payment_repo
     from app.repositories import team as team_repo
 
-    payments = await payment_repo.list_successful_payments(
-        session,
-        event_id=event_id,
-        limit=5000,
-    )
+    payments = await payment_repo.list_donations(session, event_id, limit=5000)
 
-    teams = await team_repo.get_teams_with_votes(session, event_id)
-    team_map = {team.id: team.name for team, _ in teams}
+    teams = await team_repo.list_teams(session, event_id)
+    team_map = {team.id: team.name for team in teams}
 
     donor_map = {}
-    for payment in payments:
-        key = payment.supporter_name.strip().lower()
+    for supporter_name, team_id, amount, votes, created_at in payments:
+        key = supporter_name.strip().lower()
         if not key:
             continue
         if key not in donor_map:
             donor_map[key] = {
-                "name": payment.supporter_name.strip(),
-                "team_name": team_map.get(payment.team_id, ""),
+                "name": supporter_name.strip(),
+                "team_name": team_map.get(team_id, ""),
                 "amount": 0,
                 "votes": 0,
                 "transactions": 0,
-                "last_payment": payment.created_at,
+                "last_payment": created_at,
             }
         donor = donor_map[key]
-        donor["amount"] += payment.amount
-        donor["votes"] += payment.votes
+        donor["amount"] += amount
+        donor["votes"] += votes
         donor["transactions"] += 1
-        if payment.created_at and payment.created_at > donor["last_payment"]:
-            donor["last_payment"] = payment.created_at
-            donor["team_name"] = team_map.get(payment.team_id, donor["team_name"])
+        if created_at and created_at > donor["last_payment"]:
+            donor["last_payment"] = created_at
+            donor["team_name"] = team_map.get(team_id, donor["team_name"])
 
     entries = sorted(donor_map.values(), key=lambda x: x["amount"], reverse=True)
     for i, entry in enumerate(entries, start=1):

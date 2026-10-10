@@ -36,14 +36,28 @@ logging.getLogger("app.core.database").warning(
     _driver, _host, _port, settings.is_sqlite,
 )
 
+# SQLite uses NullPool, which rejects the queue-pool sizing arguments.
+_pool_sizing = {} if settings.is_sqlite else {
+    "pool_size": settings.DB_POOL_SIZE,
+    "max_overflow": settings.DB_MAX_OVERFLOW,
+    "pool_timeout": settings.DB_POOL_TIMEOUT,
+    "pool_recycle": 1800,
+    "pool_pre_ping": True,
+    "connect_args": {
+        "timeout": 10,  # connect timeout
+        "command_timeout": settings.DB_STATEMENT_TIMEOUT_SECONDS,
+        "server_settings": {
+            "statement_timeout": str(settings.DB_STATEMENT_TIMEOUT_SECONDS * 1000),
+            # A crashed request must not leave a row lock held forever.
+            "idle_in_transaction_session_timeout": "30000",
+        },
+    },
+}
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG and not settings.is_sqlite,
-    pool_size=1,
-    max_overflow=2,
-    pool_timeout=5,
-    pool_recycle=180,
-    pool_pre_ping=True,
+    **_pool_sizing,
 )
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

@@ -1,18 +1,6 @@
-{% extends "base.html" %}
-{% block title %}Voting Ditutup — Web Voting Championship{% endblock %}
-
+{% extends "public_base.html" %}
+{% from "macros/public.html" import icon %}
+{% block title %}Voting Ditutup — Raja Voting Digital{% endblock %}
 {% block content %}
-<section class="min-h-[60vh] flex items-center justify-center px-4 sm:px-6 py-16">
-  <div class="text-center max-w-md">
-    <span class="w-14 h-14 rounded-2xl bg-gray-100 inline-flex items-center justify-center text-2xl mb-5">🔒</span>
-    <h1 class="font-display font-semibold text-2xl sm:text-3xl text-navy mb-3">Voting Sedang Ditutup</h1>
-    <p class="text-gray-500 leading-relaxed mb-4">
-      Periode voting untuk <span class="font-medium text-navy">{{ event.name }}</span> belum dibuka atau sudah berakhir.
-      Silakan kembali lagi nanti.
-    </p>
-    <a href="/events" class="inline-block px-6 py-3 rounded bg-brand hover:bg-brand-bright text-white transition-colors font-display uppercase tracking-wide text-sm">
-      Lihat Event Lain
-    </a>
-  </div>
-</section>
+<section class="shell closed-page"><div class="closed-illustration">{{ icon('clock') }}<span>✦</span></div><span class="eyebrow">SETIAP MOMEN PUNYA WAKTUNYA</span><h1>Panggungnya masih di sini.<br><em>Voting sedang ditutup.</em></h1><p>Periode voting untuk <strong>{{ event.name }}</strong> belum dibuka atau sudah berakhir. Kamu tetap bisa melihat para peserta dan peringkat mereka.</p><div class="hero-actions"><a href="/leaderboard?event_id={{ event.id }}" class="button button-dark">Lihat Leaderboard {{ icon('arrow') }}</a><a href="/events" class="text-link">Jelajahi Event</a></div></section>
 {% endblock %}

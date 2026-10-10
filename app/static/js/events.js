@@ -3,6 +3,7 @@ function eventsPage(event, allEvents) {
     event: event || null,
     allEvents: allEvents || [],
     tab: 'peserta',
+    eventQuery: '', openOnly: false, participantQuery: '',
     dataPeserta: [],
     dataLeaderboard: [],
     dataDonatur: [],
@@ -70,6 +71,7 @@ function eventsPage(event, allEvents) {
         this.dataDonatur = [];
         this.error = { peserta: null, leaderboard: null, donatur: null };
         this.participantPage = 1;
+        this.participantQuery = '';
 
         this.fetchIfNeeded('peserta');
 
@@ -98,6 +100,7 @@ function eventsPage(event, allEvents) {
 
          const res = await fetch(endpoints[tabName]);
          const result = await res.json();
+         if (!res.ok || !result.success) throw new Error(result.message || 'Gagal memuat data');
 
          // Handle different API response shapes:
          // - teams: { data: [...array...] }
@@ -113,7 +116,7 @@ function eventsPage(event, allEvents) {
 
           if (tabName === 'peserta') {
             const maxPage = Math.ceil(
-              (this.dataPeserta || []).length / this.participantsPerPage
+              this.filteredParticipants.length / this.participantsPerPage
             );
 
             if (maxPage === 0) {
@@ -128,6 +131,26 @@ function eventsPage(event, allEvents) {
        } finally {
          this.loading[tabName] = false;
        }
+    },
+
+    initials(name) {
+      return (name || '?').trim().split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
+    },
+
+    formatDate(value) {
+      if (!value) return '';
+      return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value));
+    },
+
+    get filteredEvents() {
+      const query = this.eventQuery.trim().toLocaleLowerCase('id-ID');
+      return this.allEvents.filter(event => (!this.openOnly || event.is_voting_open) &&
+        `${event.name} ${event.description || ''}`.toLocaleLowerCase('id-ID').includes(query));
+    },
+
+    get filteredParticipants() {
+      const query = this.participantQuery.trim().toLocaleLowerCase('id-ID');
+      return this.dataPeserta.filter(team => `${team.name} ${team.school || ''}`.toLocaleLowerCase('id-ID').includes(query));
     },
 
     get currentData() {
@@ -165,14 +188,14 @@ function eventsPage(event, allEvents) {
       const start =
           (this.participantPage - 1) * this.participantsPerPage;
 
-      return (this.dataPeserta || []).slice(
+      return this.filteredParticipants.slice(
           start,
           start + this.participantsPerPage
       );
     },
 
     get participantDisplayStart() {
-      if (!this.dataPeserta?.length) return 0;
+      if (!this.filteredParticipants.length) return 0;
 
       return (this.participantPage - 1) * this.participantsPerPage + 1;
     },
@@ -180,13 +203,13 @@ function eventsPage(event, allEvents) {
     get participantDisplayEnd() {
       return Math.min(
           this.participantPage * this.participantsPerPage,
-          (this.dataPeserta || []).length
+          this.filteredParticipants.length
       );
     },
 
     get participantTotalPages() {
       return Math.ceil(
-          (this.dataPeserta || []).length / this.participantsPerPage
+          this.filteredParticipants.length / this.participantsPerPage
       );
     },
 

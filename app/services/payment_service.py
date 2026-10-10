@@ -2,17 +2,20 @@
 Payment & vote engine business logic (service layer).
 
 Rules enforced here:
-- votes are derived from qty * price_per_vote for new payments
+- votes equal qty (plus any bonus); the amount is qty * price_per_vote, but
+  votes are never derived from the rupiah amount
 - vote_snapshot is stored per payment so future price changes never
   alter past transactions
 - a vote is inserted ONLY after the payment reaches SUCCESS
 - payments are never hard-deleted
 - webhook is idempotent (re-process is a no-op)
 """
-import hashlib
-import hmac
+import asyncio
+import functools
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
@@ -28,7 +31,7 @@ from app.repositories import team as team_repo
 from app.repositories import vote_log as vote_log_repo
 from app.repositories import webhook_log as webhook_log_repo
 from app.schemas.payment import PaymentCreate, PaymentOut
-from app.services import cache, event_service
+from app.services import event_service
 from app.services.midtrans_service import create_transaction as midtrans_create_transaction
 from app.services.midtrans_service import verify_signature as midtrans_verify_signature
 from app.services.vote_service import process_successful_payment
@@ -37,6 +40,10 @@ from app.utils import new_id
 logger = logging.getLogger(__name__)
 
 INVOICE_TTL_MINUTES = 15
+MIDTRANS_TIMEOUT_SECONDS = 15
+# Own pool so a burst of invoices neither waits behind nor starves the default
+# executor (which asyncio also uses for DNS lookups).
+_GATEWAY_EXECUTOR = ThreadPoolExecutor(max_workers=16, thread_name_prefix="gateway")
 MOCK_QRIS_BASE = "WVC2026"
 
 # Status Midtrans yang dianggap sukses → vote diberikan.
@@ -47,6 +54,31 @@ _FAILED_TRANSACTIONS = {"deny", "cancel", "expire", "failure"}
 
 class PaymentError(Exception):
     """Raised for expected business errors inside payment flow."""
+
+
+class PaymentNotFound(PaymentError):
+    """The referenced payment does not exist."""
+
+
+class PaymentUnavailable(PaymentError):
+    """The payment gateway is not configured, so no invoice can be issued."""
+
+
+def _replay_or_raise(existing: Payment, payload: PaymentCreate) -> Payment:
+    """Return the original invoice for a retried request, never someone else's."""
+    same_request = (existing.team_id, existing.supporter_phone, existing.qty) == (
+        payload.team_id, payload.supporter_phone, payload.qty,
+    )
+    if not same_request:
+        raise PaymentError("Idempotency-Key sudah dipakai untuk permintaan lain")
+    return existing
+
+
+def _amount_matches(gross_amount, expected: int) -> bool:
+    try:
+        return Decimal(str(gross_amount)) == Decimal(expected)
+    except InvalidOperation:
+        return False
 
 
 def _build_snapshot(
@@ -79,11 +111,24 @@ async def create_payment(
     if team.event_id != payload.event_id:
         raise PaymentError("Event ID tidak cocok untuk tim yang dipilih")
 
+    # Idempotency: a retry with the same key gets the original invoice back,
+    # even while it is still pending or after voting has closed.
+    if payload.idempotency_key:
+        existing_by_key = await payment_repo.get_by_idempotency_key(
+            session, payload.idempotency_key
+        )
+        if existing_by_key:
+            return _replay_or_raise(existing_by_key, payload)
+
     event = await event_service.get_event_or_404(session, payload.event_id)
     await event_service.require_voting_open(event)
 
     if not event.price_per_vote or event.price_per_vote <= 0:
         raise PaymentError("Harga vote untuk event ini belum diatur.")
+
+    # Fail closed: no server key means no real gateway, and mock mode is opt-in.
+    if not settings.MIDTRANS_SERVER_KEY and not settings.midtrans_mock_enabled:
+        raise PaymentUnavailable("Pembayaran belum dikonfigurasi. Hubungi panitia.")
 
     package_code = "custom"
     package_label = f"{payload.qty} vote"
@@ -91,8 +136,8 @@ async def create_payment(
     bonus_votes = 0
     qty = payload.qty
 
-    amount = (unit_price or 0) * qty
-    votes = (unit_price or event.price_per_vote) * qty + bonus_votes
+    amount = unit_price * qty
+    votes = qty + bonus_votes
 
     snapshot = _build_snapshot(
         package_name=package_label,
@@ -120,20 +165,11 @@ async def create_payment(
             "invoice tersebut kedaluwarsa."
         )
 
-    # Idempotency: if client supplied a key, return existing payment.
-    if payload.idempotency_key:
-        existing_by_key = await payment_repo.get_by_idempotency_key(
-            session, payload.idempotency_key
-        )
-        if existing_by_key:
-            return existing_by_key
-
     payment = Payment(
         id=new_id("pay"),
         team_id=team.id,
         event_id=event.id,
         user_id=user_id,
-        package_id=payload.package_id,
         package_code=package_code,
         package_label=package_label,
         qty=qty,
@@ -160,15 +196,25 @@ async def create_payment(
                 session, payload.idempotency_key
             )
             if existing_by_key:
-                return existing_by_key
+                return _replay_or_raise(existing_by_key, payload)
         raise
 
     if settings.MIDTRANS_SERVER_KEY:
         try:
-            result = midtrans_create_transaction(
-                payment,
-                server_key=settings.MIDTRANS_SERVER_KEY,
-                is_production=settings.MIDTRANS_IS_PRODUCTION,
+            # midtransclient is blocking `requests` with no timeout: run it off the
+            # event loop (otherwise every SSE stream and request on this worker
+            # freezes for the whole round trip) and bound the wait.
+            result = await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(
+                    _GATEWAY_EXECUTOR,
+                    functools.partial(
+                        midtrans_create_transaction,
+                        payment,
+                        server_key=settings.MIDTRANS_SERVER_KEY,
+                        is_production=settings.MIDTRANS_IS_PRODUCTION,
+                    ),
+                ),
+                timeout=MIDTRANS_TIMEOUT_SECONDS,
             )
             payment.midtrans_order_id = result.get("order_id", payment.id)
             payment.midtrans_transaction_id = result.get("transaction_id")
@@ -221,9 +267,12 @@ def to_payment_out(payment: Payment, team: Team) -> PaymentOut:
 
 
 def verify_webhook_signature(payload: dict, raw_body: bytes) -> bool:
-    """Midtrans v2 webhook signature: SHA512(order_id+status_code+gross_amount+ServerKey)."""
+    """Midtrans v2 webhook signature: SHA512(order_id+status_code+gross_amount+ServerKey).
+
+    Fails closed: without a server key only explicit mock mode (local dev) skips the check.
+    """
     if not settings.MIDTRANS_SERVER_KEY:
-        return True
+        return settings.midtrans_mock_enabled
     return midtrans_verify_signature(payload, raw_body, settings.MIDTRANS_SERVER_KEY)
 
 
@@ -237,9 +286,17 @@ async def process_webhook(session: AsyncSession, payload: dict) -> tuple[Payment
     if not order_id:
         raise PaymentError("order_id tidak ada di payload webhook")
 
-    payment = await payment_repo.get_by_midtrans_order_id(session, order_id)
+    # Row lock: Midtrans retries and parallel notifications for one order must
+    # not both see PENDING and grant the votes twice.
+    payment = await payment_repo.get_by_midtrans_order_id(session, order_id, for_update=True)
     if not payment:
-        raise PaymentError(f"Payment {order_id} tidak ditemukan")
+        raise PaymentNotFound(f"Payment {order_id} tidak ditemukan")
+
+    gross_amount = payload.get("gross_amount")
+    if gross_amount is not None and not _amount_matches(gross_amount, payment.amount):
+        logger.warning("Webhook amount mismatch for %s: got %s, expected %s",
+                       payment.id, gross_amount, payment.amount)
+        raise PaymentError("gross_amount tidak sesuai dengan nilai invoice")
 
     # Signature sudah diverifikasi di level router menggunakan raw body asli.
     is_valid = True
@@ -286,8 +343,8 @@ async def simulate_payment_status(
 ) -> Payment:
     """Simulate a Midtrans payment outcome for mock mode (no Midtrans call).
 
-    Only meant to be used when ``settings.MIDTRANS_SERVER_KEY`` is empty (the
-    same condition that gates the mock QRIS fallback in ``create_payment``).
+    Only meant to be used in explicit mock mode (``settings.midtrans_mock_enabled``,
+    the same condition that gates the mock QRIS in ``create_payment``).
 
     Reuses the *exact* idempotency guard from ``process_webhook``: an already
     SUCCESS payment is returned untouched so votes are never double-processed.
@@ -295,7 +352,7 @@ async def simulate_payment_status(
     sequence is run, mirroring the webhook router so leaderboard behaviour is
     identical whether the outcome came from Midtrans or the mock simulator.
     """
-    payment = await payment_repo.get_payment(session, payment_id)
+    payment = await payment_repo.get_payment(session, payment_id, for_update=True)
     if not payment:
         raise PaymentError("Invoice tidak ditemukan")
 
@@ -323,11 +380,5 @@ async def simulate_payment_status(
     if status == PaymentStatus.SUCCESS:
         await process_successful_payment(session, payment)
         await session.flush()
-
-        # Mirror the webhook router's cache + SSE broadcast sequence.
-        event = await event_service.get_event_or_404(session, payment.event_id)
-        fresh = await event_service.build_leaderboard(session, event.id)
-        await cache.set_cached_leaderboard(event.id, fresh)
-        await cache.publish({"type": "leaderboard", "event_id": payment.event_id})
 
     return payment
