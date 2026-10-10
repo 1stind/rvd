@@ -8,6 +8,6 @@
 # public.css, which flips the cascade (e.g. preflight line-heights win there).
 set -eu
 cd "$(dirname "$0")/.."
-npx --yes tailwindcss@3.4.17 -c tailwind.config.js \
+node deploy/assets/node_modules/tailwindcss/lib/cli.js -c tailwind.config.js \
   -i app/static/css/tailwind.input.css \
   -o app/static/css/tailwind.css --minify "$@"

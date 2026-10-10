@@ -2,7 +2,7 @@
 
 ## Current release
 
-The approved ivory/navy/gold UI and the existing hardened backend are combined in this repository. They are running at https://rajavotedigital.my.id from `/srv/rvd/releases/20261010-voting-status`, selected through `/srv/rvd/current`.
+The approved ivory/navy/gold UI and the existing hardened backend are combined in this repository. Tencent now follows GitHub `main` through the [automatic deployment runner](deploy/auto-deploy.md). `/srv/rvd/current` selects the last validated `git-<commit>` release; `.git-revision` records its commit. The manual `20261010-voting-status` release remains available for recovery.
 
 The voting-status follow-up corrects public labels for events marked open outside their scheduled window. It changes presentation only; event schedules and voting eligibility rules are preserved. See [verification and recovery](deploy/voting-status-20261010.md).
 
