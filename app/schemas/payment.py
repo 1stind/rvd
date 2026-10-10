@@ -21,6 +21,7 @@ class PaymentCreate(BaseModel):
     supporter_email: Optional[str] = Field(default=None, max_length=255)
     supporter_phone: str = Field(min_length=1, max_length=20)
     is_anonymous: bool = False
+    idempotency_key: Optional[str] = Field(default=None, max_length=64)
 
 
 class PaymentOut(BaseModel):

@@ -6,6 +6,7 @@ from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func
 
 from app.models.leaderboard_snapshot import LeaderboardSnapshot
 from app.models.team import Team
@@ -19,11 +20,14 @@ async def build_leaderboard(
 ) -> dict:
     """Return leaderboard payload ordered by votes desc, with ranking."""
     pairs = await team_repo.get_teams_with_votes(session, event_id)
+    team_ids = [team.id for team, _ in pairs]
+    trend_map = await _get_trends_batch(session, event_id, team_ids)
+
     entries = []
     for rank, (team, votes) in enumerate(pairs, start=1):
         if limit is not None and rank > limit:
             break
-        trend = await _get_trend(session, event_id, team.id)
+        trend = trend_map.get(team.id, "same")
         entries.append(
             {
                 "id": team.id,
@@ -41,6 +45,66 @@ async def build_leaderboard(
         "entries": entries,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+async def _get_trends_batch(
+    session: AsyncSession, event_id: str, team_ids: list[str]
+) -> dict[str, str]:
+    """Batch fetch latest two snapshots per team in a single query.
+
+    Uses a subquery with ROW_NUMBER() window function, filtered to rn <= 2
+    at the database level to avoid N+1 queries and minimize data transfer.
+    """
+    if not team_ids:
+        return {}
+
+    ranked = (
+        select(
+            LeaderboardSnapshot.team_id,
+            LeaderboardSnapshot.rank,
+            func.row_number()
+            .over(
+                partition_by=LeaderboardSnapshot.team_id,
+                order_by=LeaderboardSnapshot.captured_at.desc(),
+            )
+            .label("rn"),
+        )
+        .where(
+            LeaderboardSnapshot.event_id == event_id,
+            LeaderboardSnapshot.team_id.in_(team_ids),
+            LeaderboardSnapshot.deleted_at.is_(None),
+        )
+        .subquery("ranked_snapshots")
+    )
+
+    stmt = (
+        select(ranked.c.team_id, ranked.c.rank, ranked.c.rn)
+        .where(ranked.c.rn <= 2)
+        .order_by(ranked.c.team_id, ranked.c.rn)
+    )
+
+    result = await session.execute(stmt)
+    rows = result.all()
+
+    latest: dict[str, list[tuple[int, int]]] = {}
+    for team_id, rank, rn in rows:
+        latest.setdefault(team_id, []).append((rn, rank))
+
+    trend_map: dict[str, str] = {}
+    for team_id, ranks in latest.items():
+        ranks.sort(key=lambda x: x[0])
+        if len(ranks) >= 2:
+            current = ranks[0][1]
+            previous = ranks[1][1]
+            if current < previous:
+                trend_map[team_id] = "up"
+            elif current > previous:
+                trend_map[team_id] = "down"
+            else:
+                trend_map[team_id] = "same"
+        else:
+            trend_map[team_id] = "same"
+    return trend_map
 
 
 async def refresh_team_ranks(session: AsyncSession, event_id: str) -> None:
@@ -63,7 +127,7 @@ async def get_trend(session: AsyncSession, team_id: str, event_id: str) -> str:
 
 
 async def _get_trend(session: AsyncSession, event_id: str, team_id: str) -> str:
-    """Compare current rank vs previous snapshot."""
+    """Compare current rank vs previous snapshot (single team — kept for backward compat)."""
     stmt = (
         select(LeaderboardSnapshot)
         .where(

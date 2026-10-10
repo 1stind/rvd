@@ -15,6 +15,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -119,6 +120,14 @@ async def create_payment(
             "invoice tersebut kedaluwarsa."
         )
 
+    # Idempotency: if client supplied a key, return existing payment.
+    if payload.idempotency_key:
+        existing_by_key = await payment_repo.get_by_idempotency_key(
+            session, payload.idempotency_key
+        )
+        if existing_by_key:
+            return existing_by_key
+
     payment = Payment(
         id=new_id("pay"),
         team_id=team.id,
@@ -138,10 +147,21 @@ async def create_payment(
         status=PaymentStatus.PENDING,
         payment_gateway=PaymentGateway.MIDTRANS,
         currency=event.currency or "IDR",
+        idempotency_key=payload.idempotency_key,
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=INVOICE_TTL_MINUTES),
     )
     session.add(payment)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        if payload.idempotency_key:
+            existing_by_key = await payment_repo.get_by_idempotency_key(
+                session, payload.idempotency_key
+            )
+            if existing_by_key:
+                return existing_by_key
+        raise
 
     if settings.MIDTRANS_SERVER_KEY:
         try:

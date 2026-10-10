@@ -32,6 +32,9 @@ async def create_payment(
     request: Request,
     session: AsyncSession = Depends(get_db),
 ):
+    idempotency_key = request.headers.get("Idempotency-Key")
+    if idempotency_key:
+        payload.idempotency_key = idempotency_key
     try:
         payment = await payment_service.create_payment(session, payload)
     except payment_service.PaymentError as exc:
@@ -40,7 +43,7 @@ async def create_payment(
     team = await team_repo.get_team(session, payment.team_id)
     data = payment_service.to_payment_out(payment, team).model_dump()
     await session.commit()
-    return ok(data, "Invoice pembayaran berhasil dibuat")
+    return ok(data, "Invoice pembayaran sudah dibuat")
 
 
 @router.get("/payments/{payment_id}/status")

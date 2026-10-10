@@ -54,3 +54,11 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
+
+# Diagnostic startup log — logs driver type and source without exposing credentials.
+import logging as _logging
+_driver = settings.DATABASE_URL.split("://", 1)[0] if "://" in settings.DATABASE_URL else "unknown"
+_logging.getLogger("app.core.config").warning(
+    "DB diag: driver=%s is_sqlite=%s",
+    _driver, settings.is_sqlite,
+)

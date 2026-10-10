@@ -19,39 +19,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ### enums ###
-    bind = op.get_bind()
-
-    enum_defs = [
-        ("event_status", "DRAFT", "PUBLISHED", "VOTING_OPEN", "VOTING_CLOSED", "FINISHED", "ARCHIVED"),
-        ("payment_status", "PENDING", "SETTLED", "SUCCESS", "FAILED", "EXPIRED", "CANCELED"),
-        ("payment_gateway", "MIDTRANS", "MANUAL", "TRANSFER"),
-        ("payment_channel", "QRIS", "BANK_TRANSFER", "E_WALLET", "CASH"),
-        ("queue_status", "WAITING", "ACTIVE", "EXPIRED", "RELEASED"),
-        ("user_role", "ADMIN", "USER"),
-        ("audit_actor", "ADMIN", "USER", "SYSTEM", "WEBHOOK"),
-    ]
-
-    for name, *values in enum_defs:
-        exists = bind.execute(
-            sa.text(
-                "SELECT 1 FROM pg_type WHERE typname = :name AND typnamespace = "
-                "(SELECT oid FROM pg_namespace WHERE nspname = 'public')"
-            ),
-            {"name": name},
-        ).fetchone()
-
-        if not exists:
-            values_sql = ", ".join(f"'{v}'" for v in values)
-            bind.execute(sa.text(f"CREATE TYPE {name} AS ENUM ({values_sql})"))
-
-    event_status = sa.Enum("DRAFT", "PUBLISHED", "VOTING_OPEN", "VOTING_CLOSED", "FINISHED", "ARCHIVED", name="event_status", create_type=False)
-    payment_status = sa.Enum("PENDING", "SETTLED", "SUCCESS", "FAILED", "EXPIRED", "CANCELED", name="payment_status", create_type=False)
-    payment_gateway = sa.Enum("MIDTRANS", "MANUAL", "TRANSFER", name="payment_gateway", create_type=False)
-    payment_channel = sa.Enum("QRIS", "BANK_TRANSFER", "E_WALLET", "CASH", name="payment_channel", create_type=False)
-    queue_status = sa.Enum("WAITING", "ACTIVE", "EXPIRED", "RELEASED", name="queue_status", create_type=False)
-    user_role = sa.Enum("ADMIN", "USER", name="user_role", create_type=False)
-    audit_actor = sa.Enum("ADMIN", "USER", "SYSTEM", "WEBHOOK", name="audit_actor", create_type=False)
+    event_status = sa.Enum("DRAFT", "PUBLISHED", "VOTING_OPEN", "VOTING_CLOSED", "FINISHED", "ARCHIVED", name="event_status")
+    payment_status = sa.Enum("PENDING", "SETTLED", "SUCCESS", "FAILED", "EXPIRED", "CANCELED", name="payment_status")
+    payment_gateway = sa.Enum("MIDTRANS", "MANUAL", "TRANSFER", name="payment_gateway")
+    payment_channel = sa.Enum("QRIS", "BANK_TRANSFER", "E_WALLET", "CASH", name="payment_channel")
+    queue_status = sa.Enum("WAITING", "ACTIVE", "EXPIRED", "RELEASED", name="queue_status")
+    user_role = sa.Enum("ADMIN", "USER", name="user_role")
+    audit_actor = sa.Enum("ADMIN", "USER", "SYSTEM", "WEBHOOK", name="audit_actor")
 
     # ### users ###
     op.create_table(
