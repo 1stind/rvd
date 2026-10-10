@@ -1,4 +1,5 @@
 """Public rendering and event-specific leaderboard regression checks."""
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -6,7 +7,34 @@ import pytest
 from starlette.requests import Request
 
 from app.enums.event_status import EventStatus
+from app.models.event import Event
 from app.routers import pages
+
+
+@pytest.mark.parametrize('opens_days,closes_days,is_open,label', [
+    (1, 2, False, 'Voting belum dimulai'),
+    (-1, 1, True, 'Voting dibuka'),
+    (-2, -1, False, 'Voting ditutup'),
+    (None, None, True, 'Voting dibuka'),
+    (None, -1, False, 'Voting ditutup'),
+])
+def test_public_event_label_matches_voting_window(opens_days, closes_days, is_open, label):
+    now = datetime.now(timezone.utc)
+    event = Event(id='scheduled-event', name='Scheduled Event', status=EventStatus.VOTING_OPEN,
+                  opens_at=now + timedelta(days=opens_days) if opens_days is not None else None,
+                  closes_at=now + timedelta(days=closes_days) if closes_days is not None else None)
+    data = pages._event_dict(event)
+    assert data['is_voting_open'] is is_open
+    assert data['status'] == label
+    assert data['status_code'] == EventStatus.VOTING_OPEN.value
+
+
+@pytest.mark.parametrize('status', [EventStatus.PUBLISHED, EventStatus.VOTING_CLOSED,
+                                  EventStatus.FINISHED, EventStatus.ARCHIVED])
+def test_unscheduled_public_event_preserves_lifecycle_label(status):
+    data = pages._event_dict(Event(id='event', name='Event', status=status))
+    assert data['status'] == pages._STATUS_LABELS[status]
+    assert data['is_voting_open'] is False
 
 
 def request(path='/'):

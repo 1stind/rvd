@@ -2,7 +2,9 @@
 
 ## Current release
 
-The approved ivory/navy/gold UI and the existing hardened backend are combined in this repository. They are running at https://rajavotedigital.my.id from `/srv/rvd/releases/20261010-ivory-gold`, selected through `/srv/rvd/current`.
+The approved ivory/navy/gold UI and the existing hardened backend are combined in this repository. They are running at https://rajavotedigital.my.id from `/srv/rvd/releases/20261010-voting-status`, selected through `/srv/rvd/current`.
+
+The voting-status follow-up corrects public labels for events marked open outside their scheduled window. It changes presentation only; event schedules and voting eligibility rules are preserved. See [verification and recovery](deploy/voting-status-20261010.md).
 
 The visual release did not change the previously deployed Python backend, schema, dependency lock or checkout client. Compared with the older GitHub `main`, this branch also records those earlier production improvements: payment/vote integrity, concurrency controls, SSE resource handling, shared caching, middleware hardening and the associated regression tests.
 

@@ -4,6 +4,7 @@ Frontend page routes (SSR HTML via Jinja2).
 Per CLAUDE.md rules: routers only receive requests and return responses.
 Data berasal dari service + repository (database).
 """
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -55,12 +56,18 @@ async def _get_event_by_id_or_active(session: AsyncSession, event_id: str | None
 
 
 def _event_dict(event) -> dict:
+    is_voting_open = event.is_voting_open
+    status = _STATUS_LABELS.get(event.status, event.status.value)
+    if event.status == EventStatus.VOTING_OPEN and not is_voting_open:
+        status = "Voting ditutup"
+        if event.opens_at and event.opens_at > datetime.now(timezone.utc):
+            status = "Voting belum dimulai"
     return {
         "id": event.id,
         "name": event.name,
-        "status": _STATUS_LABELS.get(event.status, event.status.value),
+        "status": status,
         "status_code": event.status.value,
-        "is_voting_open": event.is_voting_open,
+        "is_voting_open": is_voting_open,
         "description": event.description or "",
         "banner_url": event.banner_url,
         "opens_at": event.opens_at.isoformat() if event.opens_at else None,
