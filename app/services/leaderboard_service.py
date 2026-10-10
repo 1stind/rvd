@@ -1,45 +1,58 @@
 """
-Leaderboard service — business logic for ranking and trends.
+Leaderboard service — ranking, trend, cache and SSE push.
+
+Read path: one query on teams (trend comes from teams.current_rank vs
+teams.previous_rank), cached for CACHE_TTL seconds and refreshed on every push.
+Write path: after a vote commits, schedule_push() coalesces pushes per event so
+a burst of payments costs one rebuild + one broadcast per window.
 """
+import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
 
-from app.models.leaderboard_snapshot import LeaderboardSnapshot
+from app.core.config import settings
+from app.core.database import async_session
 from app.models.team import Team
-from app.repositories import leaderboard_snapshot as snapshot_repo
 from app.repositories import team as team_repo
-from app.utils import new_id
+from app.services import cache
+
+logger = logging.getLogger(__name__)
+
+# Strong references so pending push tasks are not garbage-collected mid-sleep.
+_pending_pushes: set[asyncio.Task] = set()
+
+
+def _trend(team: Team) -> str:
+    if team.current_rank is None or team.previous_rank is None:
+        return "same"
+    if team.current_rank < team.previous_rank:
+        return "up"
+    if team.current_rank > team.previous_rank:
+        return "down"
+    return "same"
 
 
 async def build_leaderboard(
     session: AsyncSession, event_id: str, limit: Optional[int] = None
 ) -> dict:
-    """Return leaderboard payload ordered by votes desc, with ranking."""
+    """Return leaderboard payload ordered by votes desc, with ranking (uncached)."""
     pairs = await team_repo.get_teams_with_votes(session, event_id)
-    team_ids = [team.id for team, _ in pairs]
-    trend_map = await _get_trends_batch(session, event_id, team_ids)
-
-    entries = []
-    for rank, (team, votes) in enumerate(pairs, start=1):
-        if limit is not None and rank > limit:
-            break
-        trend = trend_map.get(team.id, "same")
-        entries.append(
-            {
-                "id": team.id,
-                "rank": rank,
-                "team_id": team.id,
-                "name": team.name,
-                "school": team.school,
-                "votes": votes,
-                "trend": trend,
-                "logo_url": getattr(team, "logo_url", None),
-            }
-        )
+    entries = [
+        {
+            "id": team.id,
+            "rank": rank,
+            "team_id": team.id,
+            "name": team.name,
+            "school": team.school,
+            "votes": votes,
+            "trend": _trend(team),
+            "logo_url": team.logo_url,
+        }
+        for rank, (team, votes) in enumerate(pairs[:limit] if limit else pairs, start=1)
+    ]
     return {
         "event_id": event_id,
         "entries": entries,
@@ -47,105 +60,61 @@ async def build_leaderboard(
     }
 
 
-async def _get_trends_batch(
-    session: AsyncSession, event_id: str, team_ids: list[str]
-) -> dict[str, str]:
-    """Batch fetch latest two snapshots per team in a single query.
-
-    Uses a subquery with ROW_NUMBER() window function, filtered to rn <= 2
-    at the database level to avoid N+1 queries and minimize data transfer.
-    """
-    if not team_ids:
-        return {}
-
-    ranked = (
-        select(
-            LeaderboardSnapshot.team_id,
-            LeaderboardSnapshot.rank,
-            func.row_number()
-            .over(
-                partition_by=LeaderboardSnapshot.team_id,
-                order_by=LeaderboardSnapshot.captured_at.desc(),
-            )
-            .label("rn"),
-        )
-        .where(
-            LeaderboardSnapshot.event_id == event_id,
-            LeaderboardSnapshot.team_id.in_(team_ids),
-            LeaderboardSnapshot.deleted_at.is_(None),
-        )
-        .subquery("ranked_snapshots")
-    )
-
-    stmt = (
-        select(ranked.c.team_id, ranked.c.rank, ranked.c.rn)
-        .where(ranked.c.rn <= 2)
-        .order_by(ranked.c.team_id, ranked.c.rn)
-    )
-
-    result = await session.execute(stmt)
-    rows = result.all()
-
-    latest: dict[str, list[tuple[int, int]]] = {}
-    for team_id, rank, rn in rows:
-        latest.setdefault(team_id, []).append((rn, rank))
-
-    trend_map: dict[str, str] = {}
-    for team_id, ranks in latest.items():
-        ranks.sort(key=lambda x: x[0])
-        if len(ranks) >= 2:
-            current = ranks[0][1]
-            previous = ranks[1][1]
-            if current < previous:
-                trend_map[team_id] = "up"
-            elif current > previous:
-                trend_map[team_id] = "down"
-            else:
-                trend_map[team_id] = "same"
-        else:
-            trend_map[team_id] = "same"
-    return trend_map
+async def get_leaderboard(session: AsyncSession, event_id: str) -> dict:
+    """Full ranking for public reads, served from cache when warm."""
+    payload = await cache.get_cached_leaderboard(event_id)
+    if payload is None:
+        payload = await build_leaderboard(session, event_id)
+        await cache.set_cached_leaderboard(event_id, payload)
+    return payload
 
 
 async def refresh_team_ranks(session: AsyncSession, event_id: str) -> None:
-    """Update current_rank on each team and create a new snapshot."""
+    """Store each team's new rank and the rank it had before this vote.
+
+    The ORM only writes rows whose values actually changed, so a vote that does
+    not move anyone touches no team row besides the voted one.
+    """
     pairs = await team_repo.get_teams_with_votes(session, event_id)
-    for rank, (team, votes) in enumerate(pairs, start=1):
+    for rank, (team, _) in enumerate(pairs, start=1):
+        team.previous_rank = team.current_rank
         team.current_rank = rank
-        await snapshot_repo.create_snapshot(
-            session,
-            event_id=event_id,
-            team_id=team.id,
-            rank=rank,
-            total_votes=votes,
-        )
     await session.flush()
 
 
-async def get_trend(session: AsyncSession, team_id: str, event_id: str) -> str:
-    return await _get_trend(session, event_id, team_id)
+async def publish_leaderboard(event_id: str) -> None:
+    """Rebuild from committed data, refresh the cache and push to SSE clients.
+
+    The message must carry the full ranking: leaderboard.js only applies pushes
+    that contain ``data.entries``.
+    """
+    async with async_session() as session:
+        fresh = await build_leaderboard(session, event_id)
+    await cache.set_cached_leaderboard(event_id, fresh)
+    await cache.publish({"type": "leaderboard", "event_id": event_id, "data": fresh})
 
 
-async def _get_trend(session: AsyncSession, event_id: str, team_id: str) -> str:
-    """Compare current rank vs previous snapshot (single team — kept for backward compat)."""
-    stmt = (
-        select(LeaderboardSnapshot)
-        .where(
-            LeaderboardSnapshot.event_id == event_id,
-            LeaderboardSnapshot.team_id == team_id,
-            LeaderboardSnapshot.deleted_at.is_(None),
-        )
-        .order_by(LeaderboardSnapshot.captured_at.desc())
-        .limit(2)
-    )
-    result = await session.execute(stmt)
-    rows = result.scalars().all()
-    if len(rows) < 2:
-        return "same"
-    current_rank = rows[0].rank
-    previous_rank = rows[1].rank
-    if current_rank < previous_rank:
-        return "up"
-    if current_rank > previous_rank:
-        return "down"
-    return "same"
+async def _push_later(event_id: str, delay: float) -> None:
+    await asyncio.sleep(delay)
+    try:
+        await publish_leaderboard(event_id)
+    except Exception:
+        logger.exception("Leaderboard push failed for event %s", event_id)
+
+
+async def schedule_push(event_id: str) -> None:
+    """Call after a vote is COMMITTED.
+
+    The first vote in a window schedules one push at the end of the window; the
+    push rebuilds from the database then, so it includes every vote committed
+    meanwhile. Later votes in the same window are no-ops.
+    """
+    interval = settings.LEADERBOARD_PUSH_INTERVAL_SECONDS
+    if interval <= 0:
+        await publish_leaderboard(event_id)
+        return
+    if not await cache.try_lock(f"wvc:lbpush:{event_id}", interval):
+        return
+    task = asyncio.create_task(_push_later(event_id, interval))
+    _pending_pushes.add(task)
+    task.add_done_callback(_pending_pushes.discard)

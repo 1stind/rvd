@@ -1,0 +1,45 @@
+{% extends "public_base.html" %}
+{% from "macros/public.html" import icon %}
+{% set admin_pages = [
+  ('/admin', 'Dashboard', 'Gambaran menyeluruh untuk setiap momen kompetisi.', 'grid'),
+  ('/admin/events', 'Event & Peserta', 'Kelola panggung, peserta, dan perjalanan kompetisi.', 'calendar'),
+  ('/admin/leaderboard', 'Leaderboard', 'Pantau perolehan suara dan posisi peserta.', 'trophy'),
+  ('/admin/transactions', 'Transaksi', 'Telusuri pembayaran dan dukungan yang tercatat.', 'wallet'),
+  ('/admin/audit-logs', 'Audit Log', 'Jejak aktivitas untuk pengelolaan yang transparan.', 'shield'),
+  ('/admin/settings', 'Pengaturan', 'Sesuaikan identitas dan preferensi platform.', 'settings'),
+  ('/admin/progress', 'Progres', 'Lihat catatan kesiapan dan pengembangan platform.', 'check')
+] %}
+{% set current_page = admin_pages | selectattr('0', 'equalto', request.url.path) | first | default(admin_pages[0]) %}
+{% block body_class %}public-site admin-site{% endblock %}
+{% block head %}{{ super() }}
+<link rel="stylesheet" href="/static/css/admin.css?v={{ tailwind_css_version | default("preview", true) }}">
+<script src="/static/js/admin.js?v={{ tailwind_css_version | default("preview", true) }}"></script>
+{% endblock %}
+{% block navbar %}<a class="skip-link" href="#admin-main">Lewati ke konten</a>{% endblock %}
+{% block footer %}{% endblock %}
+{% block content %}
+<div class="admin-workspace">
+  <aside id="sidebar" class="admin-sidebar" aria-label="Navigasi admin">
+    <a href="/admin" class="wordmark"><img class="brand-logo" src="/static/images/raja-voting-logo.png?v={{ tailwind_css_version | default("preview", true) }}" width="56" height="56" alt="Logo Raja Voting Digital"><span>raja<span class="brand-light">voting</span><small>ORGANIZER WORKSPACE</small></span></a>
+    <button type="button" class="sidebar-close" onclick="toggleSidebar(false)" aria-label="Tutup navigasi">×</button>
+    <div class="workspace-label"><span class="workspace-avatar">{{ icon('trophy') }}</span><div>Ruang penyelenggara<small>Raja Voting Digital</small></div></div>
+    <p class="nav-caption">WORKSPACE</p>
+    <nav>
+      {% for path, label, description, symbol in admin_pages %}
+      <a href="{{ path }}" class="admin-nav-link" {% if path == request.url.path %}aria-current="page"{% endif %}>{{ icon(symbol) }}<span>{{ label }}</span>{% if path == request.url.path %}<i></i>{% endif %}</a>
+      {% endfor %}
+    </nav>
+    <div class="sidebar-bottom"><div class="sidebar-note">{{ icon('spark') }}<p>Di balik setiap momen,<br><em>ada pengelola yang hebat.</em></p></div><a href="/" class="admin-nav-link">{{ icon('arrow') }}<span>Lihat situs publik</span></a><button type="button" onclick="logout()" class="admin-nav-link">{{ icon('logout') }}<span>Keluar</span></button><small>RAJA VOTING DIGITAL · 2026</small></div>
+  </aside>
+  <button id="overlay" class="admin-overlay hidden" onclick="toggleSidebar(false)" aria-label="Tutup navigasi"></button>
+  <div class="admin-main-column">
+    <header class="admin-topbar"><div class="admin-breadcrumb"><button id="admin-menu" type="button" onclick="toggleSidebar()" aria-label="Buka navigasi admin" aria-expanded="false" aria-controls="sidebar">{{ icon('menu') }}</button><span>Workspace</span><span class="breadcrumb-divider">/</span><strong>{{ current_page[1] }}</strong></div><div class="admin-topbar-right"><a href="/" class="public-site-link">Situs publik ↗</a><span class="admin-user-mark">A</span><span>Admin</span></div></header>
+    <section id="admin-main" class="admin-content" tabindex="-1">
+      <div class="admin-page-heading"><div><span class="eyebrow">ORGANIZER WORKSPACE</span><h1>{{ current_page[1] }}<span>.</span></h1><p>{{ current_page[2] }}</p></div><span class="admin-heading-emblem" aria-hidden="true">{{ icon(current_page[3]) }}</span></div>
+      {% block admin_content %}{% endblock %}
+      <footer class="admin-footnote"><span>Raja Voting Digital</span><span>Setiap dukungan berarti.</span></footer>
+    </section>
+  </div>
+</div>
+{% block admin_modals %}{% endblock %}
+{% endblock %}

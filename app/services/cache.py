@@ -2,28 +2,38 @@
 Leaderboard cache + SSE fan-out.
 
 Production: Redis pub/sub + cache.
-Dev/test fallback (REDIS_URL=memory://...): in-memory dict + asyncio queues.
-Leaderboard payload disimpan di cache agar read-heavy tidak membebani DB.
-SSE memakai pub/sub broadcast — bukan WebSocket (aturan CLAUDE.md).
+Dev/test fallback (REDIS_URL=memory://...): in-memory dict, single process.
+
+Fan-out: each worker process holds ONE Redis subscription and copies every
+leaderboard message into the queues of its own SSE clients, so 200 viewers cost
+one Redis connection per worker instead of one each. Messages are parsed and
+framed once per process, not once per client.
+SSE memakai pub/sub broadcast — bukan WebSocket.
 """
 import asyncio
 import json
+import logging
 import time
 from collections import defaultdict
-from typing import Any, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, Optional
 
 from redis.asyncio import Redis, from_url
 
 from app.core.config import settings
 from app.utils import dumps
 
+logger = logging.getLogger(__name__)
+
 _CHANNEL = "wvc:leaderboard"
 
-# --- Redis vs in-memory backend selection --------------------------------
 _redis: Optional[Redis] = None
-_memory_subs: dict[int, set[asyncio.Queue]] = defaultdict(set)
 _memory_cache: dict[str, tuple[float, str]] = {}
-_memory_lock = asyncio.Lock()
+_memory_locks: dict[str, float] = {}
+
+# event_id -> queues of this process's SSE clients (each holds SSE frames).
+_subscribers: dict[str, set[asyncio.Queue]] = defaultdict(set)
+_listener: Optional[asyncio.Task] = None
 
 CACHE_TTL = 10  # detik
 
@@ -37,8 +47,12 @@ async def _get_redis() -> Optional[Redis]:
     if not _use_redis():
         return None
     if _redis is None:
-        _redis = from_url(settings.REDIS_URL, decode_responses=True)
-        await _redis.ping()
+        _redis = from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
     return _redis
 
 
@@ -49,12 +63,10 @@ async def cache_get(key: str) -> Optional[str]:
         if item and item[0] > time.time():
             return item[1]
         return None
-    r = await _get_redis()
-    if r is None:
-        return None
     try:
-        return await r.get(key)
-    except Exception:
+        return await (await _get_redis()).get(key)
+    except Exception as exc:
+        logger.warning("cache_get failed for %s: %s", key, exc)
         return None
 
 
@@ -62,73 +74,122 @@ async def cache_set(key: str, value: str, ttl: int = CACHE_TTL) -> None:
     if not _use_redis():
         _memory_cache[key] = (time.time() + ttl, value)
         return
-    r = await _get_redis()
-    if r is None:
-        return
     try:
-        await r.set(key, value, ex=ttl)
+        await (await _get_redis()).set(key, value, ex=ttl)
+    except Exception as exc:
+        logger.warning("cache_set failed for %s: %s", key, exc)
+
+
+async def try_lock(key: str, ttl_seconds: float) -> bool:
+    """True for the first caller within ttl_seconds, across all workers."""
+    if not _use_redis():
+        now = time.monotonic()
+        if _memory_locks.get(key, 0) > now:
+            return False
+        _memory_locks[key] = now + ttl_seconds
+        return True
+    try:
+        return bool(await (await _get_redis()).set(key, "1", nx=True, px=int(ttl_seconds * 1000)))
     except Exception:
-        pass
+        logger.warning("try_lock failed for %s", key, exc_info=True)
+        return True  # fail open: an extra push is harmless, a lost one is not
 
 
 # --- Pub/sub broadcast ------------------------------------------------------
+def _fan_out(raw: str) -> None:
+    """Deliver one published message to this process's SSE clients of its event."""
+    try:
+        message = json.loads(raw)
+    except (TypeError, ValueError):
+        return
+    if not isinstance(message, dict) or message.get("type") != "leaderboard":
+        return
+    frame = f"data: {raw}\n\n"
+    for queue in list(_subscribers.get(message.get("event_id"), ())):
+        if queue.full():
+            # A slow client only needs the newest ranking; drop the stale one.
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        queue.put_nowait(frame)
+
+
+async def _listen_forever() -> None:
+    """The single Redis subscription of this process; reconnects with capped backoff."""
+    backoff = 1.0
+    while True:
+        client = from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_keepalive=True,
+            health_check_interval=30,
+        )
+        pubsub = client.pubsub(ignore_subscribe_messages=True)
+        try:
+            await pubsub.subscribe(_CHANNEL)
+            backoff = 1.0
+            async for raw in pubsub.listen():
+                if raw.get("type") == "message":
+                    _fan_out(raw["data"])
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("Redis subscription lost; retrying in %.0fs", backoff, exc_info=True)
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 30.0)
+        finally:
+            try:
+                await pubsub.aclose()
+                await client.aclose()
+            except Exception:
+                pass
+
+
+def _ensure_listener() -> None:
+    global _listener
+    if _use_redis() and (_listener is None or _listener.done()):
+        _listener = asyncio.create_task(_listen_forever())
+
+
+@asynccontextmanager
+async def subscription(event_id: str, maxsize: int = 4) -> AsyncIterator[asyncio.Queue]:
+    """Queue of ready-to-send SSE frames for one client of one event."""
+    _ensure_listener()
+    queue: asyncio.Queue = asyncio.Queue(maxsize=maxsize)
+    _subscribers[event_id].add(queue)
+    try:
+        yield queue
+    finally:
+        subs = _subscribers.get(event_id)
+        if subs is not None:
+            subs.discard(queue)
+            if not subs:
+                _subscribers.pop(event_id, None)
+
+
+def subscriber_count() -> int:
+    return sum(len(s) for s in _subscribers.values())
+
+
 async def publish(payload: dict[str, Any]) -> None:
     message = dumps(payload)
     if not _use_redis():
-        async with _memory_lock:
-            snapshot = list(_memory_subs.values())
-        for queue_set in snapshot:
-            for queue in list(queue_set):
-                try:
-                    queue.put_nowait(message)
-                except Exception:
-                    pass
-        return
-    r = await _get_redis()
-    if r is None:
+        _fan_out(message)
         return
     try:
-        await r.publish(_CHANNEL, message)
+        await (await _get_redis()).publish(_CHANNEL, message)
     except Exception:
-        pass
+        logger.warning("publish failed", exc_info=True)
 
 
-async def subscribe() -> Any:
-    """Return an async iterator of broadcast messages (str)."""
-    if not _use_redis():
-        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-        async with _memory_lock:
-            _memory_subs[id(queue)].add(queue)
-        try:
-            while True:
-                message = await queue.get()
-                yield message
-        finally:
-            async with _memory_lock:
-                _memory_subs[id(queue)].discard(queue)
-        return
-
-    r = await _get_redis()
-    if r is None:
-        while True:
-            await asyncio.sleep(30)
-            yield dumps({})
-        return
-
-    pubsub = r.pubsub()
-    await pubsub.subscribe(_CHANNEL)
-    try:
-        async for raw in pubsub.listen():
-            if raw["type"] == "message":
-                yield raw["data"]
-    finally:
-        await pubsub.unsubscribe(_CHANNEL)
-        await pubsub.close()
+def _leaderboard_key(event_id: str) -> str:
+    return f"wvc:leaderboard:{event_id}:all"
 
 
-async def get_cached_leaderboard(event_id: str, limit: Optional[int] = None) -> Optional[dict]:
-    key = f"wvc:leaderboard:{event_id}:{limit or 'all'}"
-    raw = await cache_get(key)
+async def get_cached_leaderboard(event_id: str) -> Optional[dict]:
+    raw = await cache_get(_leaderboard_key(event_id))
     if raw is None:
         return None
     try:
@@ -137,6 +198,5 @@ async def get_cached_leaderboard(event_id: str, limit: Optional[int] = None) -> 
         return None
 
 
-async def set_cached_leaderboard(event_id: str, payload: dict, limit: Optional[int] = None) -> None:
-    key = f"wvc:leaderboard:{event_id}:{limit or 'all'}"
-    await cache_set(key, dumps(payload))
+async def set_cached_leaderboard(event_id: str, payload: dict) -> None:
+    await cache_set(_leaderboard_key(event_id), dumps(payload))

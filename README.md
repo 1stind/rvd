@@ -1,71 +1,47 @@
-# Web Voting Championship
+# Raja Voting Digital
 
-Platform voting kompetisi online dengan pembayaran QRIS (Midtrans) — pembayaran otomatis dikonversi menjadi vote.
+General-event voting platform built with FastAPI, Jinja2, Alpine.js, PostgreSQL and Redis. The ivory/navy/gold public and organizer interfaces include the RV logo, event discovery, participant search, live rankings and a gold/silver/bronze top-three podium.
 
-## Status Saat Ini (Sprint 1–7 selesai, Sprint 8 sebagian)
+Production: https://rajavotedigital.my.id. This source combines the approved UI with the backend already running on Tencent. See [release verification](deploy/ivory-gold-20261010.md).
 
-Backend penuh sudah terhubung ke database. Alur inti **vote → pembayaran → leaderboard realtime** sudah berjalan end-to-end.
+## Runtime
 
-### Halaman publik (SSR)
+Use Python 3.12, PostgreSQL and the hash-locked dependencies in `requirements.lock`. SQLite is not a supported deployment or full-test target: migrations require PostgreSQL and scheduled-event comparisons require timezone-aware timestamps.
 
-- `/` — Landing page + preview top-3 Leaderboard live (SSE)
-- `/events` — Daftar tim pada event yang sedang berjalan
-- `/events/{event_id}/vote/{team_id}` — Pilih paket vote, buat invoice QRIS, polling status pembayaran
-- `/leaderboard` — Leaderboard live via Server-Sent Events
-- `/admin/login` — Login admin (session cookie)
-- `/admin` — Dashboard panitia (statistik, transaksi, export)
+Copy `.env.example` to a private `.env`, set separate generated `SECRET_KEY` and `JWT_SECRET_KEY` values, and supply the database connection. Redis is required for shared cache, rate limiting and SSE across workers; `memory://` is only for a single-process local environment. Keep environment files, credentials and database files out of Git.
 
-### API (`/api/v1/`)
+Install dependencies with `pip install --require-hashes -r requirements.lock`, apply `alembic upgrade head`, and start `uvicorn app.main:app`. Production uses the existing [systemd unit](deploy/rvd.service) and [Caddy configuration](deploy/Caddyfile).
 
-- **Events & tim** — baca publik + CRUD admin
-- **Auth** — login, logout, profil, ganti password
-- **Payments** — buat invoice QRIS, cek status, webhook Midtrans (idempotent)
-- **Leaderboard** — data awal + stream SSE realtime
-- **Admin** — dashboard, daftar transaksi, audit log, export Excel
+Build the Tailwind stylesheet with `scripts/build_css.sh` before starting production. It uses Tailwind 3.4.17; `app/static/css/tailwind.css` is generated and ignored by Git. The template selects the compiled stylesheet at startup and versions asset URLs. The CDN fallback is for development.
 
-### Sprint checklist
+Nothing is seeded automatically. Admin accounts are provisioned separately. Demo seeding is for disposable development databases only, never production; the sample event's fixed schedule must be adjusted before testing current voting windows.
 
-| Sprint | Status | Ringkasan |
-|---|---|---|
-| 1 — Frontend | ✅ Selesai | SSR Jinja2 + Alpine.js + Tailwind |
-| 2 — Database | ✅ Selesai | SQLAlchemy async, models, seeder; Alembic migration masih stub |
-| 3 — CRUD Event/Tim | ✅ Selesai | Service + repository + dashboard admin |
-| 4 — Auth | ✅ Selesai | Session cookie, Argon2, middleware `require_admin` |
-| 5 — Midtrans | ✅ Selesai | QRIS + webhook + mock fallback jika key kosong |
-| 6 — Vote engine + SSE | ✅ Selesai | Vote hanya setelah payment SUCCESS; `EventSource` di `leaderboard.js` |
-| 7 — Cache & export | ✅ Selesai | Redis/in-memory cache, audit log, export Excel |
-| 8 — Hardening | 🟡 Sebagian | Rate limit, CSRF, security headers, audit middleware sudah ada |
-| 8 — Belum | ⬜ Menyusul | Queue system, Turnstile CAPTCHA, Cloudflare, monitoring, deployment |
+## Routes
 
-## Menjalankan Secara Lokal
+| Route | Behavior |
+| --- | --- |
+| `/` | Featured event, searchable discovery and live top-three preview |
+| `/events` | Event catalog and open-voting filter |
+| `/events?event_id=...` | Participant search, pagination, rankings and supporters |
+| `/leaderboard?event_id=...` | Event-specific live leaderboard over SSE |
+| `/events/{event_id}/vote/{team_id}` | Checkout, closed-voting or payment-unavailable state |
+| `/admin/login` | Admin login using a JWT bearer token |
+| `/admin` | Organizer dashboard, with navigation to events, transactions, audit logs, leaderboard and settings |
+| `/health` | Application health response |
 
-```bash
-pip install -r requirements.txt
-cp .env.example .env
-# Dev tanpa Postgres: set DATABASE_URL=sqlite+aiosqlite:///./web_voting.db
-# Dev tanpa Redis: set REDIS_URL=memory://
-uvicorn app.main:app --reload
-```
+## Payment and vote integrity
 
-Buka http://localhost:8000 — health check di `/health`.
+Production gateway integration remains deferred. With no Midtrans key and `MIDTRANS_MOCK_MODE=false`, checkout shows an unavailable notice, invoice creation fails closed, unsigned webhooks are rejected and mock simulation is hidden. Adding real keys alone is insufficient: the Snap/QRIS response contract still requires integration and sandbox verification.
 
-Saat database kosong, **seeder otomatis** mengisi:
-- 1 event *Kompetisi Band Antar Sekolah 2026* (status Voting Open)
-- 6 tim peserta
-- 3 paket vote (Bronze / Silver / Gold)
-- Admin: `admin@panitia.id` / `admin12345`
+The backend grants `qty` votes, independently of the rupiah amount, only after successful payment. Payment snapshots preserve the purchased quantity. Row locks, atomic increments and a unique vote log per payment prevent duplicate or lost votes. Idempotent invoice replay verifies that the key belongs to the same request. Status expiry does not overwrite concurrent settlement.
 
-> **Midtrans:** isi `MIDTRANS_SERVER_KEY` & `MIDTRANS_CLIENT_KEY` di `.env` untuk QRIS asli. Tanpa key, sistem memakai mock QRIS (dev). Webhook lokal butuh tunnel publik (ngrok) ke `/api/v1/payments/webhook`.
+Admin routes validate bearer tokens; rendered database text is escaped. Public and API requests have rate limits. SSE releases database sessions before streaming and uses the Redis backplane with coalesced ranking updates. Anonymous discovery HTML has a bounded five-second per-worker cache; checkout, admin and APIs remain fresh.
 
-## Struktur & Aturan Proyek
+## Validation
 
-Arsitektur **MVC + Service Layer** — router hanya terima request/kirim response, business logic di `services/`, query DB di `repositories/`.
+- `node --test tests/*.test.cjs`: 18 checks passed in the integrated workspace.
+- Server Python suite: 70 tests passed against the isolated PostgreSQL test database. The suite refuses database names that do not end in `test` and creates real fixtures; never run it against production.
+- Production browser checks: public HTTPS pages, exact logo asset, admin login, seven admin pages at 320/390/1440 pixels, keyboard navigation and dialogs.
+- Application/migration SHA-256 comparison: 126 files matched the running Tencent release.
 
-Aturan bisnis penting:
-- Tidak ada vote tanpa transaksi pembayaran sukses
-- Vote tidak dihitung dari nominal pembayaran (harus lewat `vote_packages`)
-- `vote_snapshot` disimpan per transaksi agar perubahan paket tidak mengubah riwayat
-- Realtime memakai SSE, bukan WebSocket
-- Tidak ada hard delete pada data transaksi
-
-Detail implementasi dan handoff teknis: lihat `HANDOFF.md`.
+See [design status](DESIGN_PREVIEW.md), [handoff](HANDOFF.md), [deployment notes](deploy/README.md), and [machine-readable evidence](docs/tencent-ivory-gold-verification.json). Real payment processing, sustained/distributed load, physical devices and every CRUD/export operation were not retested for this visual release.

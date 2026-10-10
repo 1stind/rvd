@@ -1,0 +1,21 @@
+{
+  "production_url": "https://rajavotedigital.my.id",
+  "release": "/srv/rvd/releases/20261010-ivory-gold",
+  "previous_release": "/srv/rvd/releases/20261010-general-events",
+  "backup": "/var/backups/rvd/rvd-before-ivory-gold-20261010.dump",
+  "matched_files": 126,
+  "server_python_tests_passed": 70,
+  "javascript_tests_passed": 16,
+  "browser_widths": [
+    320,
+    390,
+    1440
+  ],
+  "production_admin_pages_checked": 7,
+  "backend_changed": false,
+  "schema_changed": false,
+  "dependency_lock_changed": false,
+  "production_event_or_payment_writes": false,
+  "comparison_baseline": "Previously running Tencent release: /srv/rvd/releases/20261010-general-events (not GitHub main)",
+  "integrated_workspace_javascript_tests_passed": 18
+}

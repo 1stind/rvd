@@ -2,56 +2,14 @@
 Tests for the voting and payment workflow.
 """
 import pytest
-import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from datetime import datetime, timedelta, timezone
 
-from app.main import app
-from app.core.config import settings
-from app.models.event import EventStatus
-from app.services import event_service, payment_service
-from app.utils import new_id
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.database import async_session as SessionLocal
-import asyncio
+from app.services import payment_service
 
-
-@pytest_asyncio.fixture(scope="function")
-async def db_session() -> AsyncSession:
-    """Fixture to create a new database session for each test function."""
-    async with SessionLocal() as session:
-        yield session
-
-
-@pytest_asyncio.fixture(scope="function")
-async def async_client() -> AsyncClient:
-    """Fixture for an async test client."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        yield client
-
-
-@pytest_asyncio.fixture(scope="function")
-async def test_data(db_session: AsyncSession):
-    """Fixture to create test data (event, team)."""
-    event = await event_service.create_event(
-        db_session,
-        event_service.EventCreate(
-            name="Test Event",
-            status=EventStatus.VOTING_OPEN,
-            price_per_vote=1000,
-        ),
-    )
-    team = await event_service.create_team(
-        db_session,
-        event_service.TeamCreate(
-            event_id=event.id,
-            name="Test Team",
-            school="Test School",
-        ),
-    )
-    await db_session.commit()
-    return {"event": event, "team": team}
+# Fixtures (db_session, async_client, test_data) live in conftest.py.
 
 
 @pytest.mark.asyncio
@@ -66,24 +24,18 @@ async def test_create_payment_and_vote(async_client: AsyncClient, db_session: As
     team = test_data["team"]
     vote_qty = 5
 
-    # 0. Get CSRF token from a page load first
-    pre_response = await async_client.get("/")
-    assert "wvc_csrf" in pre_response.cookies
-    csrf_token = pre_response.cookies["wvc_csrf"]
-
     # 1. Create a payment
     create_payload = {
         "event_id": event.id,
         "team_id": team.id,
         "qty": vote_qty,
-        "voter_name": "Test Voter",
-        "voter_phone": "1234567890",
+        "supporter_name": "Test Voter",
+        "supporter_phone": "1234567890",
     }
-    headers = {"X-CSRF-Token": csrf_token}
-    response = await async_client.post("/api/v1/payments", json=create_payload, headers=headers)
+    response = await async_client.post("/api/v1/payments", json=create_payload)
     assert response.status_code == 200
     payment_data = response.json()["data"]
-    assert payment_data["status"] == "pending"
+    assert payment_data["status"] == "PENDING"
     assert payment_data["votes"] == vote_qty
     assert payment_data["amount"] == event.price_per_vote * vote_qty
 
@@ -91,26 +43,19 @@ async def test_create_payment_and_vote(async_client: AsyncClient, db_session: As
 
     # 2. Simulate a successful webhook callback from Midtrans
     # In a real scenario, we'd mock the webhook signature verification
-    # For local testing, we bypass it if no server key is set.
+    # In explicit mock mode (no server key) the signature is not checked.
     webhook_payload = {
         "order_id": payment_id,
         "transaction_status": "settlement",
         "status_code": "200",
         "gross_amount": str(float(payment_data["amount"])),
-        "signature_key": "will_be_ignored_in_test_if_no_key",
     }
 
-    # Temporarily disable webhook signature verification for the test
-    original_verify = payment_service.verify_webhook_signature
-    payment_service.verify_webhook_signature = lambda payload, raw_body: True
-
+    # Explicit mock mode (conftest) accepts unsigned notifications.
     webhook_response = await async_client.post("/api/v1/payments/webhook", json=webhook_payload)
 
-    # Restore the original function
-    payment_service.verify_webhook_signature = original_verify
-
     assert webhook_response.status_code == 200
-    assert webhook_response.json()["data"]["status"] == "success"
+    assert webhook_response.json()["data"]["status"] == "SUCCESS"
 
     # 3. Verify vote log and payment status in the database
     from app.repositories import payment as payment_repo
@@ -137,20 +82,15 @@ async def test_failed_payment_does_not_add_vote(async_client: AsyncClient, db_se
     team = test_data["team"]
     vote_qty = 10
 
-    # 0. Get CSRF token
-    pre_response = await async_client.get("/")
-    csrf_token = pre_response.cookies["wvc_csrf"]
-
     # 1. Create a payment
     create_payload = {
         "event_id": event.id,
         "team_id": team.id,
         "qty": vote_qty,
-        "voter_name": "Failing Voter",
-        "voter_phone": "0987654321",
+        "supporter_name": "Failing Voter",
+        "supporter_phone": "0987654321",
     }
-    headers = {"X-CSRF-Token": csrf_token}
-    response = await async_client.post("/api/v1/payments", json=create_payload, headers=headers)
+    response = await async_client.post("/api/v1/payments", json=create_payload)
     assert response.status_code == 200
     payment_data = response.json()["data"]
     payment_id = payment_data["id"]
@@ -161,17 +101,13 @@ async def test_failed_payment_does_not_add_vote(async_client: AsyncClient, db_se
         "transaction_status": "deny",  # Failed status
         "status_code": "201",
         "gross_amount": str(float(payment_data["amount"])),
-        "signature_key": "will_be_ignored_in_test_if_no_key",
     }
 
-    original_verify = payment_service.verify_webhook_signature
-    payment_service.verify_webhook_signature = lambda payload, raw_body: True
     webhook_response = await async_client.post("/api/v1/payments/webhook", json=webhook_payload)
-    payment_service.verify_webhook_signature = original_verify
 
     assert webhook_response.status_code == 200
     # The webhook processor itself doesn't return failure, just the processed status
-    assert webhook_response.json()["data"]["status"] == "failed"
+    assert webhook_response.json()["data"]["status"] == "FAILED"
 
     # 3. Verify vote log and payment status in the database
     from app.repositories import payment as payment_repo
@@ -297,13 +233,9 @@ async def test_success_payment_allows_new_payment(async_client: AsyncClient, db_
         "transaction_status": "settlement",
         "status_code": "200",
         "gross_amount": str(float(payment_data_1["amount"])),
-        "signature_key": "will_be_ignored_in_test_if_no_key",
     }
 
-    original_verify = payment_service.verify_webhook_signature
-    payment_service.verify_webhook_signature = lambda payload, raw_body: True
     webhook_response = await async_client.post("/api/v1/payments/webhook", json=webhook_payload)
-    payment_service.verify_webhook_signature = original_verify
 
     assert webhook_response.status_code == 200
     assert webhook_response.json()["data"]["status"] == "SUCCESS"

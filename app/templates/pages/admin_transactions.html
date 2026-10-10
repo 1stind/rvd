@@ -1,48 +1,7 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% block title %}Transactions - Web Voting Championship{% endblock %}
 
-{% block content %}
-<div class="flex h-screen overflow-hidden bg-gray-100">
-
-  <!-- SIDEBAR -->
-  <aside id="sidebar"
-    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
-
-    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
-
-    <nav class="space-y-1 text-sm">
-      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
-      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
-      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Transactions</a>
-      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
-      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
-    </nav>
-
-  </aside>
-
-  <!-- OVERLAY -->
-  <div id="overlay"
-    onclick="toggleSidebar()"
-    class="fixed inset-0 bg-black/30 hidden md:hidden">
-  </div>
-
-  <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-
-    <!-- TOPBAR -->
-    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
-        <h1 class="text-lg font-semibold text-gray-800">Transactions</h1>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
-        <span class="text-sm font-medium text-gray-700">Admin</span>
-      </div>
-    </header>
-
-    <!-- CONTENT -->
-    <main class="p-6 space-y-6 overflow-y-auto">
+{% block admin_content %}
 
       <!-- LOADING STATE -->
       <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
@@ -114,15 +73,14 @@
         </div>
       </div>
 
-    </main>
 
-  </div>
-</div>
 {% endblock %}
+
 
 {% block scripts %}
 <script>
 (function() {
+  const esc = window.adminEscapeHTML;
   const API_BASE = '/api/v1';
   let allEvents = [];
 
@@ -163,16 +121,16 @@
       'SETTLED': 'bg-blue-100 text-blue-600',
     };
     const cls = map[status] || 'bg-gray-100 text-gray-600';
-    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + status + '</span>';
+    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + esc(status) + '</span>';
   }
 
   async function loadEvents() {
     const data = await api('/events');
     allEvents = data?.data || [];
     const select = document.getElementById('filter-event');
-    select.innerHTML = '<option value="">Semua Event</option>' +
+    select.innerHTML = '<option value="">Semua event</option>' +
       allEvents.map(function(ev) {
-        return '<option value="' + ev.id + '">' + ev.name + '</option>';
+        return '<option value="' + esc(ev.id) + '">' + esc(ev.name) + '</option>';
       }).join('');
   }
 
@@ -215,25 +173,25 @@
       } else {
         tbody.innerHTML = payments.map(function(p) {
           var statusClass = p.status === 'SUCCESS' ? 'text-green-600' : p.status === 'PENDING' ? 'text-amber-600' : p.status === 'FAILED' ? 'text-red-600' : 'text-gray-500';
-          var statusLabel = p.status === 'SUCCESS' ? 'Success' : p.status === 'PENDING' ? 'Pending' : p.status === 'FAILED' ? 'Failed' : p.status === 'EXPIRED' ? 'Expired' : p.status === 'CANCELED' ? 'Canceled' : p.status;
+          var statusLabel = {SUCCESS: 'Berhasil', PENDING: 'Menunggu', FAILED: 'Gagal', EXPIRED: 'Kedaluwarsa', CANCELED: 'Dibatalkan', SETTLED: 'Diselesaikan'}[p.status] || p.status;
           var timeInfo = '';
           if (p.status === 'SUCCESS' && p.paid_at) {
             timeInfo = new Date(p.paid_at).toLocaleString('id-ID');
           } else if ((p.status === 'EXPIRED' || p.status === 'CANCELED') && p.expires_at) {
-            timeInfo = 'Exp: ' + new Date(p.expires_at).toLocaleString('id-ID');
+            timeInfo = 'Kedaluwarsa: ' + new Date(p.expires_at).toLocaleString('id-ID');
           } else {
             timeInfo = p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '';
           }
           return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
-            '<td class="px-6 py-3 font-mono text-xs text-gray-500">' + (p.id || '') + '</td>' +
-            '<td class="px-6 py-3 text-gray-800">' + (p.event_name || p.event_id || '') + '</td>' +
-            '<td class="px-6 py-3 font-medium text-gray-800">' + (p.team_name || '') + '</td>' +
-            '<td class="px-6 py-3 text-gray-500">' + (p.package || '') + '</td>' +
-            '<td class="px-6 py-3 text-right font-medium text-gray-800">Rp ' + (p.amount || 0).toLocaleString('id-ID') + '</td>' +
-            '<td class="px-6 py-3 text-right font-medium text-blue-600">' + (p.votes || 0) + '</td>' +
-            '<td class="px-6 py-3 ' + statusClass + ' font-medium">' + statusLabel + '</td>' +
-            '<td class="px-6 py-3 text-gray-500">' + (p.supporter_name || '') + '</td>' +
-            '<td class="px-6 py-3 text-gray-500">' + (p.supporter_phone || '') + '</td>' +
+            '<td class="px-6 py-3 font-mono text-xs text-gray-500">' + esc(p.id) + '</td>' +
+            '<td class="px-6 py-3 text-gray-800">' + esc(p.event_name || p.event_id) + '</td>' +
+            '<td class="px-6 py-3 font-medium text-gray-800">' + esc(p.team_name) + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + esc(p.package) + '</td>' +
+            '<td class="px-6 py-3 text-right font-medium text-gray-800">Rp ' + esc((p.amount || 0).toLocaleString('id-ID')) + '</td>' +
+            '<td class="px-6 py-3 text-right font-medium text-blue-600">' + esc(p.votes || 0) + '</td>' +
+            '<td class="px-6 py-3 ' + statusClass + ' font-medium">' + esc(statusLabel) + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + esc(p.supporter_name) + '</td>' +
+            '<td class="px-6 py-3 text-gray-500">' + esc(p.supporter_phone) + '</td>' +
             '<td class="px-6 py-3 text-xs text-gray-400">' + (p.created_at ? new Date(p.created_at).toLocaleString('id-ID') : '') + '</td>' +
             '<td class="px-6 py-3 text-xs text-gray-400">' + timeInfo + '</td>' +
           '</tr>';
@@ -249,22 +207,8 @@
     }
   }
 
-  window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const isOpen = sidebar.classList.contains('translate-x-0');
 
-    if (isOpen) {
-      sidebar.classList.remove('translate-x-0');
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    } else {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      overlay.classList.remove('hidden');
-    }
-  };
-
+  window.loadTransactions = loadTransactions;
   loadEvents().then(function() {
     return loadTransactions();
   });

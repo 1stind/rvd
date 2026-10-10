@@ -3,15 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/static/images/raja-voting-logo.png?v={{ tailwind_css_version | default("preview", true) }}">
+<link rel="apple-touch-icon" href="/static/images/raja-voting-logo.png?v={{ tailwind_css_version | default("preview", true) }}">
 <title>{% block title %}Web Voting Championship{% endblock %}</title>
 <meta name="description" content="Platform voting kompetisi online — dukung tim favoritmu dengan suara yang transparan dan bisa diaudit.">
 
 <!-- Fonts: Oswald (display/labels), Bebas Neue (scoreboard numerals), Plus Jakarta Sans (body) -->
+{% block fonts %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+{% endblock %}
 
-<!-- Tailwind CSS (JIT via CDN) -->
+{% if not tailwind_css_version %}
+<!-- Tailwind CSS development fallback -->
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
@@ -31,26 +36,29 @@
     },
   };
 </script>
+{% else %}
+<link rel="stylesheet" href="/static/css/tailwind.css?v={{ tailwind_css_version }}">
+{% endif %}
 
-<link rel="stylesheet" href="/static/css/custom.css">
+<link rel="stylesheet" href="/static/css/custom.css?v={{ tailwind_css_version | default("preview", true) }}">
 <style>
   [x-cloak] { display: none !important; }
 </style>
 {% block head %}{% endblock %}
 </head>
-<body class="font-body bg-gray-50 text-navy antialiased">
+<body class="{% block body_class %}font-body bg-gray-50 text-navy antialiased{% endblock %}">
 
-{% include "partials/navbar.html" %}
+{% block navbar %}{% include "partials/navbar.html" %}{% endblock %}
 
 <main>
 {% block content %}{% endblock %}
 </main>
 
-{% include "partials/footer.html" %}
+{% block footer %}{% include "partials/footer.html" %}{% endblock %}
 
 {% block scripts %}{% endblock %}
 
 <!-- Alpine.js self-hosted to avoid CDN issues -->
-<script defer src="/static/js/alpine.min.js"></script>
+<script defer src="/static/js/alpine.min.js?v={{ tailwind_css_version | default("preview", true) }}"></script>
 </body>
 </html>

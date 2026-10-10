@@ -4,6 +4,9 @@ Frontend page routes (SSR HTML via Jinja2).
 Per CLAUDE.md rules: routers only receive requests and return responses.
 Data berasal dari service + repository (database).
 """
+from datetime import datetime, timezone
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -15,19 +18,27 @@ from app.enums.event_status import EventStatus
 from app.repositories import event as event_repo
 from app.repositories import payment as payment_repo
 from app.repositories import team as team_repo
-from app.services import event_service
+from app.services import event_service, leaderboard_service
+from app.services.public_page_cache import cache_discovery_page
 
 router = APIRouter()
 
 templates = Jinja2Templates(directory="app/templates")
 
+# Prebuilt Tailwind (scripts/build_css.sh) replaces the in-browser Play CDN when
+# present; the mtime busts browser caches after a rebuild + restart.
+_TAILWIND_CSS = Path("app/static/css/tailwind.css")
+templates.env.globals["tailwind_css_version"] = (
+    int(_TAILWIND_CSS.stat().st_mtime) if _TAILWIND_CSS.exists() else None
+)
+
 _STATUS_LABELS = {
-    EventStatus.DRAFT: "Draft",
-    EventStatus.PUBLISHED: "Published",
-    EventStatus.VOTING_OPEN: "Voting Open",
-    EventStatus.VOTING_CLOSED: "Voting Closed",
-    EventStatus.FINISHED: "Finished",
-    EventStatus.ARCHIVED: "Archived",
+    EventStatus.DRAFT: "Draf",
+    EventStatus.PUBLISHED: "Terbit",
+    EventStatus.VOTING_OPEN: "Voting dibuka",
+    EventStatus.VOTING_CLOSED: "Voting ditutup",
+    EventStatus.FINISHED: "Selesai",
+    EventStatus.ARCHIVED: "Diarsipkan",
 }
 
 
@@ -45,13 +56,20 @@ async def _get_event_by_id_or_active(session: AsyncSession, event_id: str | None
 
 
 def _event_dict(event) -> dict:
+    is_voting_open = event.is_voting_open
+    status = _STATUS_LABELS.get(event.status, event.status.value)
+    if event.status == EventStatus.VOTING_OPEN and not is_voting_open:
+        status = "Voting ditutup"
+        if event.opens_at and event.opens_at > datetime.now(timezone.utc):
+            status = "Voting belum dimulai"
     return {
         "id": event.id,
         "name": event.name,
-        "status": _STATUS_LABELS.get(event.status, event.status.value),
+        "status": status,
         "status_code": event.status.value,
-        "is_voting_open": event.is_voting_open,
+        "is_voting_open": is_voting_open,
         "description": event.description or "",
+        "banner_url": event.banner_url,
         "opens_at": event.opens_at.isoformat() if event.opens_at else None,
         "closes_at": event.closes_at.isoformat() if event.closes_at else None,
         "price_per_vote": getattr(event, "price_per_vote", 10000) or 10000,
@@ -81,68 +99,64 @@ def _team_dict(team, votes: int, rank: int) -> dict:
 
 
 @router.get("/")
+@cache_discovery_page
 async def landing(request: Request, session: AsyncSession = Depends(get_db)):
-    event = await _get_event_by_id_or_active(session)
+    events = [ev for ev in await event_repo.list_events(session, limit=50)
+              if ev.status not in (EventStatus.DRAFT, EventStatus.ARCHIVED)]
+    event = next((ev for ev in events if ev.is_voting_open), events[0] if events else None)
     leaderboard = []
     if event:
-        leaderboard = (await event_service.build_leaderboard(session, event.id, limit=3))["entries"]
+        leaderboard = (await leaderboard_service.get_leaderboard(session, event.id))["entries"][:3]
     return templates.TemplateResponse(
         request,
         "pages/landing.html",
         {
             "event": _event_dict(event) if event else None,
+            "all_events": [_event_dict(ev) for ev in events],
             "leaderboard": leaderboard,
         },
     )
 
 
 @router.get("/events")
+@cache_discovery_page
 async def events_list(
     request: Request,
     event_id: str | None = Query(default=None),
     session: AsyncSession = Depends(get_db),
 ):
-    all_events_raw = await event_repo.list_events(session, limit=50)
+    all_events_raw = [ev for ev in await event_repo.list_events(session, limit=50)
+                      if ev.status not in (EventStatus.DRAFT, EventStatus.ARCHIVED)]
+    event_ids = [ev.id for ev in all_events_raw]
+    # Two aggregate queries for all events (was 2 queries + up to 5000 full
+    # payment rows per event).
+    team_stats = await team_repo.stats_by_event(session, event_ids)
+    donor_counts = await payment_repo.count_donors_by_event(session, event_ids)
 
     events_with_stats = []
     for ev in all_events_raw:
-        pairs = await team_repo.get_teams_with_votes(session, ev.id)
-        ev_total_votes = sum(votes for _, votes in pairs)
-        payments = await payment_repo.list_successful_payments(session, event_id=ev.id, limit=5000)
-        unique_donors = len(set(p.supporter_name for p in payments if p.supporter_name))
+        team_count, ev_total_votes = team_stats.get(ev.id, (0, 0))
         progress = 0
-        if ev.price_per_vote and ev_total_votes > 0:
-            progress = min(100, int((ev_total_votes / max(1, len(pairs) * 100)) * 100)) if len(pairs) > 0 else 0
+        if ev.price_per_vote and ev_total_votes > 0 and team_count > 0:
+            progress = min(100, int((ev_total_votes / max(1, team_count * 100)) * 100))
         events_with_stats.append(
             _event_with_stats_dict(
                 ev,
-                total_teams=len(pairs),
+                total_teams=team_count,
                 total_votes=ev_total_votes,
-                total_supporters=unique_donors,
+                total_supporters=donor_counts.get(ev.id, 0),
                 progress=progress,
             )
         )
 
-    event = await _get_event_by_id_or_active(session, event_id)
-    teams = []
-    leaderboard = {"entries": []}
-    donors = {"entries": []}
-    if event:
-        pairs = await team_repo.get_teams_with_votes(session, event.id)
-        teams = [_team_dict(team, votes, rank) for rank, (team, votes) in enumerate(pairs, start=1)]
-        leaderboard = await event_service.build_leaderboard(session, event.id)
-        donors = await event_service.build_donors(session, event.id)
-
+    # Teams, leaderboard and donors tabs are fetched lazily by events.js.
+    event = next((ev for ev in all_events_raw if ev.id == event_id), None)
     return templates.TemplateResponse(
         request,
         "pages/events.html",
         {
-            "events": events_with_stats,
             "event": _event_dict(event) if event else None,
             "all_events": events_with_stats,
-            "teams": teams,
-            "leaderboard": leaderboard,
-            "donors": donors,
         },
     )
 
@@ -169,9 +183,16 @@ async def vote_page(
             status_code=200,
         )
 
-    rank_pairs = await team_repo.get_teams_with_votes(session, event_id)
-    rank = next((i for i, (t, _) in enumerate(rank_pairs, start=1) if t.id == team_id), 1)
-    votes = next((v for t, v in rank_pairs if t.id == team_id), 0)
+    if not settings.MIDTRANS_SERVER_KEY and not settings.midtrans_mock_enabled:
+        return templates.TemplateResponse(
+            request,
+            "pages/payments_unavailable.html",
+            {"event": _event_dict(event), "team": _team_dict(team, team.total_votes, 0)},
+        )
+
+    entries = (await leaderboard_service.get_leaderboard(session, event_id))["entries"]
+    mine = next((e for e in entries if e["team_id"] == team_id), None)
+    rank, votes = (mine["rank"], mine["votes"]) if mine else (1, team.total_votes)
 
     return templates.TemplateResponse(
         request,
@@ -184,11 +205,15 @@ async def vote_page(
 
 
 @router.get("/leaderboard")
-async def leaderboard(request: Request, session: AsyncSession = Depends(get_db)):
-    event = await _get_event_by_id_or_active(session)
+async def leaderboard(
+    request: Request,
+    event_id: str | None = Query(default=None),
+    session: AsyncSession = Depends(get_db),
+):
+    event = await _get_event_by_id_or_active(session, event_id)
     entries = []
     if event:
-        entries = (await event_service.build_leaderboard(session, event.id))["entries"]
+        entries = (await leaderboard_service.get_leaderboard(session, event.id))["entries"]
     return templates.TemplateResponse(
         request,
         "pages/leaderboard.html",

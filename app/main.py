@@ -50,10 +50,11 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Middleware — urutan penting. Middleware yang ditambahkan terakhir akan
 # dijalankan pertama (paling luar).
-# Logging -> Rate Limit -> Security -> Audit -> Route
+# Logging -> Security -> Rate Limit -> Audit -> Route
+# (Security wraps Rate Limit so 429 responses carry the security headers too.)
 app.add_middleware(AuditMiddleware)
-app.add_middleware(SecurityMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityMiddleware)
 app.add_middleware(LoggingMiddleware)
 
 # Routers
@@ -83,7 +84,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={
             "success": False,
-            "message": "Validation error",
+            "message": "Data yang dikirim tidak valid",
             "data": exc.errors(),
         },
     )

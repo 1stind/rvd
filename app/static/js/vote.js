@@ -1,251 +1,110 @@
 function votePage(team, event, createPaymentUrl, paymentStatusUrl) {
   return {
-    team: team,
-    event: event,
-    payment: null,
-
-    voter: {
-      name: '',
-      email: '',
-      phone: '',
-    },
-
-    qty: 1,
-    step: 1,
-    error: '',
-    phoneError: '',
-    isLoading: false,
-
-    showQrModal: false,
-    showSuccessModal: false,
-    showMockSimulator: false,
-
+    team, event, createPaymentUrl, paymentStatusUrl,
+    voter: { name: '', email: '', phone: '' },
+    qty: 1, step: 1, payment: null, error: '', pollError: '',
+    isLoading: false, isChecking: false,
+    showQrModal: false, showSuccessModal: false, showMockSimulator: false,
     pollInterval: null,
 
-    createPaymentUrl,
-    paymentStatusUrl,
-
     get isVotingOpen() {
-      if (!this.event) return false;
-      const now = new Date();
-      const opensAt = this.event.opens_at ? new Date(this.event.opens_at) : null;
-      const closesAt = this.event.closes_at ? new Date(this.event.closes_at) : null;
-      if (opensAt && now < opensAt) return false;
-      if (closesAt && now > closesAt) return false;
-      return true;
+      if (!this.event?.is_voting_open) return false;
+      const now = Date.now();
+      return (!this.event.opens_at || now >= Date.parse(this.event.opens_at)) &&
+        (!this.event.closes_at || now <= Date.parse(this.event.closes_at));
     },
-
-    get votingStatus() {
-      if (!this.event) return 'closed';
-      if (!this.isVotingOpen) return 'closed';
-      return 'open';
-    },
-
-    // =========================
-    // INIT
-    // =========================
-    init() {
-      console.log('[OK] Alpine votePage init');
-
-      this.$watch('voter.phone', (value) => {
-        if (!value) {
-          this.phoneError = 'Nomor WhatsApp wajib diisi.';
-        } else if (!/^\d{9,13}$/.test(value)) {
-          this.phoneError = 'Format nomor tidak valid';
-        } else {
-          this.phoneError = '';
-        }
-      });
-
-      this.$watch('qty', (value) => {
-        if (!value || value < 1) {
-          this.qty = 1;
-        }
-      });
-    },
-
-    // =========================
-    // FORMAT
-    // =========================
-    calculateTotal() {
-      return;
-    },
-
+    get totalPrice() { return this.event.price_per_vote * (Number(this.qty) || 0); },
     formatCurrency(amount) {
-      return new Intl.NumberFormat('id-ID', {
-        style: 'currency',
-        currency: 'IDR',
-        minimumFractionDigits: 0,
-      }).format(amount || 0);
+      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount || 0);
     },
-
-    get totalPrice() {
-      return (this.event?.price_per_vote || 0) * (this.qty || 0);
-    },
-
-    // =========================
-    // QTY
-    // =========================
-    incrementQty() {
-      this.qty++;
-    },
-
-    decrementQty() {
-      if (this.qty > 1) this.qty--;
-    },
-
-    // =========================
-    // STEP
-    // =========================
+    incrementQty() { this.qty = Math.min(10000, (Number(this.qty) || 0) + 1); },
+    decrementQty() { this.qty = Math.max(1, (Number(this.qty) || 1) - 1); },
     nextStep() {
       this.error = '';
-
-      if (!this.voter.name) {
-        this.error = 'Nama wajib diisi';
-        return;
+      if (!this.isVotingOpen) { this.error = 'Voting sedang tidak tersedia.'; return; }
+      if (!this.voter.name.trim() || !/^\d{9,13}$/.test(this.voter.phone)) {
+        this.error = 'Isi nama dan nomor WhatsApp dengan benar.'; return;
       }
-
-      if (this.phoneError || !this.voter.phone) {
-        this.error = this.phoneError || 'Nomor wajib diisi';
-        return;
+      if (!Number.isInteger(this.qty) || this.qty < 1 || this.qty > 10000) {
+        this.error = 'Jumlah vote harus berupa angka bulat antara 1 dan 10.000.'; return;
       }
-
+      this.payment = null;
       this.step = 2;
+      this.showQrModal = this.showMockSimulator = this.showSuccessModal = false;
+      this.$refs.paymentDialog.showModal();
     },
-
-    // =========================
-    // CREATE INVOICE
-    // =========================
     async createInvoice() {
-      this.error = '';
-
-      if (!this.voter.phone) {
-        this.error = 'Nomor wajib diisi';
-        return;
-      }
-
+      if (this.isLoading) return;
       this.isLoading = true;
-
-      const payload = {
-        event_id: this.event?.id,
-        team_id: this.team?.id,
-        qty: this.qty,
-        supporter_name: this.voter.name,
-        supporter_email: this.voter.email,
-        supporter_phone: `+62${this.voter.phone}`,
-        is_anonymous: false,
-      };
-
+      this.error = '';
       try {
-      const res = await fetch(this.createPaymentUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.message || 'Gagal');
-
-        // 🔥 SIMPAN PAYMENT
-        this.payment = data.data;
-
-        // 🔥 BUKA QR / MOCK SIMULATOR MODAL
-        // Mock mode is signalled by an explicit is_mock flag (qr_string starts
-        // with WVC2026 when MIDTRANS_SERVER_KEY is empty). Using the flag avoids
-        // sniffing the payment provider from the QR string contents.
-        if (this.payment.is_mock) {
-          this.showMockSimulator = true;
-        } else {
-          this.showQrModal = true;
-        }
-
-         // polling status
-         this.startPolling();
-      } catch (e) {
-        this.error = e.message;
-      } finally {
-        this.isLoading = false;
-      }
+        const res = await fetch(this.createPaymentUrl, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: this.event.id, team_id: this.team.id, qty: this.qty,
+            supporter_name: this.voter.name.trim(), supporter_email: this.voter.email,
+            supporter_phone: '+62' + this.voter.phone, is_anonymous: false }),
+        });
+        const body = await res.json();
+        if (!res.ok || !body.success) throw new Error(body.message || 'Pembayaran belum dapat dibuat. Silakan coba lagi.');
+        this.payment = body.data;
+        this.resumePayment();
+        this.startPolling();
+      } catch (error) { this.error = error.message || 'Tidak dapat menghubungi layanan pembayaran.'; }
+      finally { this.isLoading = false; }
     },
-
-    // =========================
-    // POLLING
-    // =========================
+    resumePayment() {
+      this.step = 3;
+      this.showMockSimulator = Boolean(this.payment?.is_mock);
+      this.showQrModal = !this.showMockSimulator;
+      this.showSuccessModal = false;
+      if (!this.$refs.paymentDialog.open) this.$refs.paymentDialog.showModal();
+    },
     startPolling() {
-      if (this.pollInterval) {
-        clearInterval(this.pollInterval);
-      }
-
-      this.pollInterval = setInterval(async () => {
-        try {
-          const res = await fetch(`${this.paymentStatusUrl}/${this.payment.id}/status`);
-          const data = await res.json();
-
-          if (data.data.status === 'SUCCESS') {
-            clearInterval(this.pollInterval);
-
-            this.showQrModal = false;
-            this.showMockSimulator = false;
-            this.showSuccessModal = true;
-
-            this.payment = data.data;
-          } else if (data.data.status === 'FAILED') {
-            clearInterval(this.pollInterval);
-
-            this.showQrModal = false;
-            this.showMockSimulator = false;
-            this.showSuccessModal = false;
-            this.error = 'Pembayaran gagal. Silakan kembali dan coba lagi.';
-          } else if (data.data.status === 'EXPIRED' || data.data.status === 'CANCELED') {
-            clearInterval(this.pollInterval);
-
-            this.showQrModal = false;
-            this.showMockSimulator = false;
-            this.showSuccessModal = false;
-            this.error = 'Invoice telah kedaluwarsa. Silakan kembali dan coba lagi.';
-          }
-        } catch (e) {
-          console.log('Polling error');
-        }
-      }, 5000);
+      clearInterval(this.pollInterval);
+      this.pollInterval = setInterval(() => this.checkPayment(), 5000);
     },
-
-    // =========================
-    // MOCK SIMULATOR
-    // =========================
+    async checkPayment() {
+      if (!this.payment || this.isChecking) return;
+      this.isChecking = true;
+      try {
+        const res = await fetch(`${this.paymentStatusUrl}/${this.payment.id}/status`);
+        const body = await res.json();
+        if (!res.ok || !body.success) throw new Error('Status pembayaran belum dapat diperiksa.');
+        this.pollError = '';
+        this.applyPayment(body.data);
+      } catch (error) { this.pollError = 'Koneksi terputus. Status pembayaran akan diperiksa kembali.'; }
+      finally { this.isChecking = false; }
+    },
+    applyPayment(payment) {
+      this.payment = payment;
+      if (payment.status === 'PENDING') return;
+      clearInterval(this.pollInterval);
+      this.pollInterval = null;
+      this.showQrModal = this.showMockSimulator = false;
+      if (payment.status === 'SUCCESS') {
+        this.step = 3;
+        this.showSuccessModal = true;
+        if (!this.$refs.paymentDialog.open) this.$refs.paymentDialog.showModal();
+      } else {
+        this.closeModal();
+        this.error = payment.status === 'FAILED' ? 'Pembayaran gagal. Silakan periksa data dan coba lagi.' : 'Pembayaran telah berakhir. Silakan buat pembayaran baru.';
+      }
+    },
     async simulate(action) {
+      if (this.isLoading) return;
+      this.isLoading = true;
       this.error = '';
       try {
         const res = await fetch(`${this.paymentStatusUrl}/mock/${this.payment.id}/simulate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
         });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || 'Gagal');
-
-        this.payment = data.data;
-
-        // Tutup simulator untuk status terminal; biarkan polling mendeteksi
-        // SUCCESS/FAILED dan menampilkan modal/error yang sesuai.
-        // Untuk PENDING, pertahankan simulator agar bisa disimulasikan lagi.
-        if (this.payment.status !== 'PENDING') {
-          this.showMockSimulator = false;
-        }
-      } catch (e) {
-        this.error = e.message;
-      }
+        const body = await res.json();
+        if (!res.ok || !body.success) throw new Error(body.message || 'Simulasi gagal.');
+        this.applyPayment(body.data);
+      } catch (error) { this.error = error.message; }
+      finally { this.isLoading = false; }
     },
-
-    // =========================
-    // CLOSE MODAL
-    // =========================
-    closeModal() {
-      this.showQrModal = false;
-    },
+    closeModal() { this.$refs.paymentDialog.close(); },
+    destroy() { clearInterval(this.pollInterval); },
   };
 }

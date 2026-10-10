@@ -1,41 +1,38 @@
-{% extends "base.html" %}
-{% block title %}Admin Login - Web Voting Championship{% endblock %}
-
+{% extends "public_base.html" %}
+{% from "macros/public.html" import icon %}
+{% block title %}Login Admin — Raja Voting Digital{% endblock %}
+{% block body_class %}public-site admin-login-page{% endblock %}
+{% block head %}{{ super() }}<link rel="stylesheet" href="/static/css/admin.css?v={{ tailwind_css_version | default("preview", true) }}">{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
 {% block content %}
-<section class="min-h-[70vh] flex items-center justify-center px-4 sm:px-6 py-16">
-  <div class="w-full max-w-sm">
-    <div class="text-center mb-8">
-      <span class="w-10 h-10 rounded bg-brand inline-flex items-center justify-center font-score text-lg text-white mb-4">W</span>
-      <h1 class="font-display font-semibold text-2xl text-navy">Admin Login</h1>
-      <p class="text-sm text-gray-400 mt-1">Masuk untuk mengelola event, tim, dan transaksi</p>
+<div class="admin-login-layout">
+  <section class="login-story">
+    <a href="/" class="wordmark"><img class="brand-logo" src="/static/images/raja-voting-logo.png?v={{ tailwind_css_version | default("preview", true) }}" width="56" height="56" alt="Logo Raja Voting Digital"><span>raja<span class="brand-light">voting</span><small>DIGITAL VOTING PLATFORM</small></span></a>
+    <div class="login-story-copy"><span class="eyebrow">BEHIND EVERY GREAT MOMENT</span><h1>Kelola panggungnya.<br><em>Rayakan potensinya.</em></h1><p>Satu ruang untuk mengelola kompetisi, merawat kepercayaan, dan memberi tempat bagi setiap talenta.</p></div>
+    {% include "partials/trophy_art.html" %}
+    <div class="login-story-footer"><span>{{ icon('spark') }} SETIAP DUKUNGAN BERARTI</span><small>RAJA VOTING DIGITAL</small></div>
+  </section>
+  <section class="login-form-panel">
+    <a href="/" class="login-back">← Kembali ke situs</a>
+    <div class="login-form-wrap">
+      <span class="login-lock">{{ icon('shield') }}</span>
+      <span class="eyebrow">ORGANIZER WORKSPACE</span>
+      <h2>Selamat <em>datang kembali.</em></h2>
+      <p>Masuk untuk mengelola event dan dukungan yang berarti.</p>
+      <form x-data="adminLogin()" @submit.prevent="submit()" class="admin-login-form" :aria-busy="loading">
+        <p x-show="error" x-cloak class="login-error" role="alert" x-text="error"></p>
+        <div><label for="email">Alamat email</label><input id="email" type="email" x-model="email" required autocomplete="username" placeholder="nama@organisasi.id"></div>
+        <div><label for="password">Kata sandi</label><div class="password-field"><input id="password" :type="showPassword ? 'text' : 'password'" type="password" x-model="password" required autocomplete="current-password" placeholder="Masukkan kata sandi"><button type="button" @click="showPassword = !showPassword" :aria-label="showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'" :aria-pressed="showPassword">{{ icon('eye') }}</button></div></div>
+        <button type="submit" :disabled="loading" class="button button-dark login-submit"><span x-text="loading ? 'Memproses…' : 'Masuk ke Workspace'"></span>{{ icon('arrow') }}</button>
+      </form>
+      <div class="login-help">{{ icon('shield') }}<p>Akses khusus pengelola yang terdaftar.<br>Hubungi pengelola platform jika membutuhkan akses.</p></div>
     </div>
-
-    <form class="bg-white rounded-xl border border-gray-200 p-6 space-y-4"
-          x-data="adminLogin()"
-          @submit.prevent="submit()">
-
-      <p x-show="error" x-cloak class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2" x-text="error"></p>
-
-      <div>
-        <label for="email" class="block text-sm font-medium text-navy mb-1.5">Email</label>
-        <input id="email" type="email" x-model="email" required placeholder="admin@panitia.id"
-               class="w-full rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm focus:border-brand outline-none">
-      </div>
-      <div>
-        <label for="password" class="block text-sm font-medium text-navy mb-1.5">Kata Sandi</label>
-        <input id="password" type="password" x-model="password" required placeholder="••••••••"
-               class="w-full rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm focus:border-brand outline-none">
-      </div>
-
-      <button type="submit" :disabled="loading"
-              class="w-full px-4 py-2.5 rounded bg-brand hover:bg-brand-bright text-white transition-colors font-display uppercase tracking-wide text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-        <span x-show="!loading">Masuk</span>
-        <span x-show="loading">Memproses…</span>
-      </button>
-    </form>
-  </div>
-</section>
-
+    <footer class="login-form-footer"><span>© 2026 Raja Voting Digital</span><span>Organizer Portal</span></footer>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
 <script>
 function adminLogin() {
   return {
@@ -43,6 +40,7 @@ function adminLogin() {
     password: '',
     loading: false,
     error: '',
+    showPassword: false,
     async submit() {
       this.loading = true;
       this.error = '';
@@ -55,7 +53,7 @@ function adminLogin() {
           body: JSON.stringify({ email: this.email, password: this.password }),
         });
         const body = await res.json();
-        if (!body.success) {
+        if (!res.ok || !body.success) {
           this.error = body.message || 'Login gagal';
           return;
         }

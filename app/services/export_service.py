@@ -24,7 +24,7 @@ async def export_vote_results(session: AsyncSession, event_id: str) -> bytes:
     ws = wb.active
     ws.title = "Hasil Voting"
 
-    ws.append(["Rangking", "Nama Tim", "Asal Sekolah", "Total Vote"])
+    ws.append(["Peringkat", "Nama tim", "Sekolah", "Total suara"])
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="1D4ED8")
     for cell in ws[1]:
@@ -60,7 +60,7 @@ async def export_payment_report(
     ws = wb.active
     ws.title = "Transaksi"
 
-    ws.append(["Invoice", "Tim", "Paket", "Qty", "Total", "Vote", "Status", "Waktu"])
+    ws.append(["ID pembayaran", "Tim", "Paket", "Jumlah", "Total", "Suara", "Status", "Waktu"])
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="1D4ED8")
     for cell in ws[1]:

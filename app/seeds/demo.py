@@ -24,8 +24,8 @@ DEMO_EVENT = {
     "name": "Kompetisi Band Antar Sekolah 2026",
     "slug": f"kompetisi-band-2026-{secrets.token_hex(3)}",
     "description": (
-        "Dukung band favoritmu dan bantu mereka naik ke puncak Leaderboard. "
-        "Setiap suara berasal dari pembayaran yang terverifikasi — transparan dan bisa diaudit."
+        "Dukung band favoritmu dan ikuti perolehan suaranya. "
+        "Suaramu masuk ke peringkat setelah pembayaran berhasil."
     ),
     "status": EventStatus.VOTING_OPEN,
     "closes_at": datetime(2026, 8, 20, 23, 59, tzinfo=timezone.utc),

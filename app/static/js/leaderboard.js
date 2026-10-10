@@ -1,5 +1,5 @@
 /**
- * Event detail page Alpine component — manages event list vs detail view
+ * Event detail page Alpine component, manages event list vs detail view
  * and the three internal tabs: Peserta, Leaderboard Tim, Donatur.
  *
  * @param {Array} initialEvents - all events with stats
@@ -27,6 +27,7 @@ function eventPage(initialEvents = [], initialEvent = null, initialTeams = [], i
     isEmpty: false,
     error: false,
     errorMessage: '',
+    connectionStatus: 'Menghubungkan pembaruan...',
 
     init() {
       if (this.activeEvent) {
@@ -150,6 +151,8 @@ function scoreboard(initial, opts = {}) {
     },
 
     async _poll() {
+      // Fallback only: while SSE is connected the result would be discarded anyway.
+      if (this._source?.readyState !== EventSource.CLOSED) return;
       try {
         const res = await fetch(`/api/v1/leaderboard?event_id=${encodeURIComponent(this._eventId)}`);
         if (!res.ok) return;
@@ -173,6 +176,8 @@ function scoreboard(initial, opts = {}) {
           name: entry.name,
           school: entry.school || '',
           votes: entry.votes,
+          logo_url: entry.logo_url || null,
+          photo_url: entry.photo_url || null,
           trend,
           justUpdated: true,
         };
@@ -197,7 +202,7 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
     event: initialEvent
       ? {
           id: initialEvent.id || null,
-          name: initialEvent.name || 'Leaderboard',
+          name: initialEvent.name || 'Peringkat',
           status: initialEvent.status || null,
           status_code: initialEvent.status_code || null,
           slug: initialEvent.slug || null,
@@ -211,7 +216,7 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
         }
       : {
           id: null,
-          name: 'Leaderboard',
+          name: 'Peringkat',
           status: null,
           status_code: null,
           slug: null,
@@ -258,6 +263,7 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
     error: false,
     errorMessage: '',
     _eventId: initialEvent?.id || null,
+    connectionStatus: 'Menghubungkan pembaruan...',
     _sse: null,
     _pollTimer: null,
     _reconnectTimer: null,
@@ -280,7 +286,7 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
         this.loading = false;
         this.isEmpty = !this.rankings.length;
       } catch (error) {
-        this.errorState(error?.message || 'Gagal memuat leaderboard.');
+        this.errorState(error?.message || 'Gagal memuat peringkat.');
       }
     },
 
@@ -396,6 +402,10 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
       this._disconnectSSE();
       const url = `/api/v1/leaderboard/stream?event_id=${encodeURIComponent(this._eventId)}`;
       this._sse = new EventSource(url);
+      this._sse.onopen = () => {
+        this.connectionStatus = 'Peringkat diperbarui langsung';
+        this._sseRetry = 0;
+      };
 
       this._sse.onmessage = (event) => {
         try {
@@ -409,6 +419,7 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
       };
 
       this._sse.onerror = () => {
+        this.connectionStatus = 'Koneksi terputus. Menghubungkan kembali...';
         this._scheduleReconnect();
       };
 
@@ -417,6 +428,8 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
     },
 
     async _poll() {
+      // Fallback only: while SSE is connected the result would be discarded anyway.
+      if (this._sse?.readyState !== EventSource.CLOSED) return;
       try {
         const response = await this.fetchJson(`/api/v1/leaderboard?event_id=${encodeURIComponent(this._eventId)}`);
         const data = response.data || response;
@@ -441,6 +454,11 @@ function leaderboardPage(initialEvent = null, initialLeaderboard = []) {
         clearTimeout(this._reconnectTimer);
         this._reconnectTimer = null;
       }
+    },
+
+    destroy() {
+      this._disconnectSSE();
+      clearInterval(this._countdownTimer);
     },
 
     _scheduleReconnect() {

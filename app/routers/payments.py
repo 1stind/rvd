@@ -20,7 +20,7 @@ from app.repositories import payment as payment_repo
 from app.repositories import team as team_repo
 from app.schemas.common import ok
 from app.schemas.payment import PaymentCreate, PaymentSimulateRequest
-from app.services import cache, event_service, payment_service
+from app.services import leaderboard_service, payment_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["payments"])
@@ -34,9 +34,14 @@ async def create_payment(
 ):
     idempotency_key = request.headers.get("Idempotency-Key")
     if idempotency_key:
+        # The header bypasses the schema's max_length; the column is varchar(64).
+        if len(idempotency_key) > 64:
+            raise HTTPException(status_code=400, detail="Idempotency-Key maksimal 64 karakter")
         payload.idempotency_key = idempotency_key
     try:
         payment = await payment_service.create_payment(session, payload)
+    except payment_service.PaymentUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except payment_service.PaymentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -60,8 +65,9 @@ async def payment_status(
         from datetime import datetime, timezone
 
         if datetime.now(timezone.utc) > payment.expires_at:
-            payment.status = PaymentStatus.EXPIRED
+            await payment_repo.expire_if_pending(session, payment.id)
             await session.commit()
+            await session.refresh(payment)
 
     team = await team_repo.get_team(session, payment.team_id)
     data = payment_service.to_payment_out(payment, team).model_dump()
@@ -85,17 +91,15 @@ async def midtrans_webhook(request: Request, session: AsyncSession = Depends(get
 
     try:
         payment, voted_now = await payment_service.process_webhook(session, payload)
-    except payment_service.PaymentError as exc:
+    except payment_service.PaymentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except payment_service.PaymentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     await session.commit()
 
     if voted_now:
-        # Update cache & broadcast SSE leaderboard refresh.
-        event = await event_service.get_event_or_404(session, payment.event_id)
-        fresh = await event_service.build_leaderboard(session, event.id)
-        await cache.set_cached_leaderboard(event.id, fresh)
-        await cache.publish({"type": "leaderboard", "event_id": event.id})
+        await leaderboard_service.schedule_push(payment.event_id)
 
     return ok({"order_id": payment.id, "status": payment.status.value}, "Webhook diterima")
 
@@ -109,11 +113,11 @@ async def mock_simulate_payment(
     """Simulate a Midtrans payment outcome (mock mode only).
 
     Mirrors ``POST /payments/webhook`` but without any Midtrans call — it is
-    gated on ``settings.MIDTRANS_SERVER_KEY`` being empty (same condition that
-    produces the mock QRIS fallback in ``create_payment``). When the server
-    key is set the endpoint is intentionally hidden (404).
+    gated on explicit mock mode (``MIDTRANS_MOCK_MODE`` with no server key),
+    the same condition that produces the mock QRIS in ``create_payment``.
+    Otherwise the endpoint is intentionally hidden (404).
     """
-    if settings.MIDTRANS_SERVER_KEY:
+    if not settings.midtrans_mock_enabled:
         raise HTTPException(status_code=404, detail="Mock endpoint tidak tersedia")
 
     try:
@@ -126,4 +130,6 @@ async def mock_simulate_payment(
     team = await team_repo.get_team(session, payment.team_id)
     data = payment_service.to_payment_out(payment, team).model_dump()
     await session.commit()
+    if payment.status == PaymentStatus.SUCCESS:
+        await leaderboard_service.schedule_push(payment.event_id)
     return ok(data, "Simulasi status pembayaran")

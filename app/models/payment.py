@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     JSON,
     String,
@@ -81,4 +82,6 @@ class Payment(TimestampMixin, UUIDMixin, Base):
         CheckConstraint("amount >= 0", name="ck_payment_amount_non_negative"),
         CheckConstraint("votes > 0", name="ck_payment_votes_positive"),
         CheckConstraint("qty > 0", name="ck_payment_qty_positive"),
+        Index("ix_payments_event_phone_status", "event_id", "supporter_phone", "status"),
+        Index("ix_payments_event_status_created", "event_id", "status", "created_at"),
     )

@@ -1,49 +1,7 @@
-{% extends "base.html" %}
+{% extends "admin_base.html" %}
 {% block title %}Events Admin - Web Voting Championship{% endblock %}
 
-{% block content %}
-<div class="flex h-screen overflow-hidden bg-gray-100">
-
-  <!-- SIDEBAR -->
-  <aside id="sidebar"
-    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
-
-    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
-
-    <nav class="space-y-1 text-sm">
-      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
-      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Events</a>
-      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
-      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
-      <a href="/admin/leaderboard" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Leaderboard</a>
-      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Settings</a>
-    </nav>
-
-  </aside>
-
-  <!-- OVERLAY -->
-  <div id="overlay"
-    onclick="toggleSidebar()"
-    class="fixed inset-0 bg-black/30 hidden md:hidden">
-  </div>
-
-  <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-
-    <!-- TOPBAR -->
-    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
-        <h1 class="text-lg font-semibold text-gray-800">Events</h1>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
-        <span class="text-sm font-medium text-gray-700">Admin</span>
-      </div>
-    </header>
-
-    <!-- CONTENT -->
-    <main class="p-6 space-y-6 overflow-y-auto">
+{% block admin_content %}
 
       <!-- LOADING STATE -->
       <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
@@ -94,13 +52,13 @@
         </div>
       </div>
 
-    </main>
 
-  </div>
-</div>
+{% endblock %}
+
+{% block admin_modals %}
 
 <!-- EVENT MODAL -->
-<div id="event-modal" class="fixed inset-0 z-50 hidden">
+<div id="event-modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="event-modal-title">
   <div class="absolute inset-0 bg-black/40" onclick="closeEventModal()"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -108,23 +66,23 @@
         <h3 class="text-lg font-semibold text-gray-800" id="event-modal-title">Create Event</h3>
         <button onclick="closeEventModal()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
       </div>
-      <form id="event-form" class="p-6 space-y-4">
+      <form id="event-form" class="p-6 space-y-4"><p id="event-form-feedback" class="notice hidden" role="status"></p>
         <input type="hidden" id="event-id" value="">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="md:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Event Name <span class="text-red-500">*</span></label>
+            <label for="event-name" class="block text-sm font-medium text-gray-700 mb-1">Event Name <span class="text-red-500">*</span></label>
             <input type="text" id="event-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="School Voting 2026">
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label for="event-description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea id="event-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Deskripsi event..."></textarea>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
+            <label for="event-slug" class="block text-sm font-medium text-gray-700 mb-1">Slug</label>
             <input type="text" id="event-slug" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="school-voting-2026">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <label for="event-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
             <select id="event-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
               <option value="DRAFT">Draft</option>
               <option value="PUBLISHED">Published</option>
@@ -135,31 +93,31 @@
             </select>
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
+            <label for="event-currency" class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
             <input type="text" id="event-currency" value="IDR" maxlength="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm uppercase">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+            <label for="event-timezone" class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
             <input type="text" id="event-timezone" value="UTC" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Price per Vote (Rp)</label>
+            <label for="event-price" class="block text-sm font-medium text-gray-700 mb-1">Price per Vote (Rp)</label>
             <input type="number" id="event-price" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="10000">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Max Vote per Transaction</label>
+            <label for="event-max-vote" class="block text-sm font-medium text-gray-700 mb-1">Max Vote per Transaction</label>
             <input type="number" id="event-max-vote" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="100">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Opens At</label>
+            <label for="event-opens-at" class="block text-sm font-medium text-gray-700 mb-1">Opens At</label>
             <input type="datetime-local" id="event-opens-at" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Closes At</label>
+            <label for="event-closes-at" class="block text-sm font-medium text-gray-700 mb-1">Closes At</label>
             <input type="datetime-local" id="event-closes-at" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
           </div>
           <div class="md:col-span-2">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Banner URL</label>
+            <label for="event-banner" class="block text-sm font-medium text-gray-700 mb-1">Banner URL</label>
             <input type="url" id="event-banner" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="https://example.com/banner.jpg">
           </div>
         </div>
@@ -173,7 +131,7 @@
 </div>
 
 <!-- DELETE CONFIRMATION MODAL -->
-<div id="delete-modal" class="fixed inset-0 z-50 hidden">
+<div id="delete-modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-label="Hapus event">
   <div class="absolute inset-0 bg-black/40"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
@@ -188,7 +146,7 @@
 </div>
 
 <!-- TEAMS MODAL -->
-<div id="teams-modal" class="fixed inset-0 z-50 hidden">
+<div id="teams-modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-label="Kelola peserta">
   <div class="absolute inset-0 bg-black/40" onclick="closeTeamsModal()"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -204,23 +162,23 @@
           <p id="team-error" class="text-sm text-red-600 hidden"></p>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Team Name <span class="text-red-500">*</span></label>
+              <label for="team-name" class="block text-sm font-medium text-gray-700 mb-1">Team Name <span class="text-red-500">*</span></label>
               <input type="text" id="team-name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Team A">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">School</label>
+              <label for="team-school" class="block text-sm font-medium text-gray-700 mb-1">School</label>
               <input type="text" id="team-school" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="SMA 1">
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Nomor Undi</label>
+              <label for="team-sort-order" class="block text-sm font-medium text-gray-700 mb-1">Nomor Undi</label>
               <input type="number" id="team-sort-order" value="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
             </div>
             <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <label for="team-description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
               <textarea id="team-description" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Deskripsi tim..."></textarea>
             </div>
             <div class="md:col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Logo URL</label>
+              <label for="team-logo-url" class="block text-sm font-medium text-gray-700 mb-1">Logo URL</label>
               <input type="url" id="team-logo-url" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="https://example.com/logo.png">
             </div>
           </div>
@@ -243,7 +201,7 @@
 </div>
 
 <!-- EVENT DETAIL MODAL -->
-<div id="event-detail-modal" class="fixed inset-0 z-50 hidden">
+<div id="event-detail-modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-label="Detail event">
   <div class="absolute inset-0 bg-black/40" onclick="closeEventDetailModal()"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -259,11 +217,14 @@
     </div>
   </div>
 </div>
+
 {% endblock %}
+
 
 {% block scripts %}
 <script>
 (function() {
+  const esc = window.adminEscapeHTML;
   const API_BASE = '/api/v1';
   let currentEventId = null;
   let isEditMode = false;
@@ -314,7 +275,8 @@
       'ARCHIVED': 'bg-gray-100 text-gray-500',
     };
     const cls = map[status] || 'bg-gray-100 text-gray-600';
-    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + status + '</span>';
+    const labels = {DRAFT: 'Draf', PUBLISHED: 'Terbit', VOTING_OPEN: 'Voting dibuka', VOTING_CLOSED: 'Voting ditutup', FINISHED: 'Selesai', ARCHIVED: 'Diarsipkan'};
+    return '<span class="inline-block px-2.5 py-1 rounded-full text-xs font-medium ' + cls + '">' + esc(labels[status] || status) + '</span>';
   }
 
   function formatDateTimeLocal(value) {
@@ -332,7 +294,7 @@
     try {
       const data = await api('/events');
       if (!data || !data.success) {
-        throw new Error(data?.message || 'Gagal memuat events');
+        throw new Error(data?.message || 'Gagal memuat event');
       }
 
       const events = data.data || [];
@@ -352,15 +314,15 @@
           }
 
           return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
-            '<td class="px-6 py-3 font-medium text-gray-800">' + (ev.name || '') + '</td>' +
+            '<td class="px-6 py-3 font-medium text-gray-800">' + esc(ev.name) + '</td>' +
             '<td class="px-6 py-3">' + getStatusBadge(ev.status) + '</td>' +
             '<td class="px-6 py-3 text-gray-500">' + dateText + '</td>' +
              '<td class="px-6 py-3 text-right">' +
-                '<a href="/events?event_id=' + ev.id + '" target="_blank" class="text-blue-600 hover:text-blue-700 text-xs font-medium mr-3">View</a>' +
-                '<button onclick="editEvent(\'' + ev.id + '\')" class="text-gray-600 hover:text-gray-800 text-xs font-medium mr-3">Edit</button>' +
-                '<button onclick="openEventDetailModal(\'' + ev.id + '\')" class="text-gray-600 hover:text-gray-800 text-xs font-medium mr-3">Detail</button>' +
-                '<button onclick="openTeamsModal(\'' + ev.id + '\')" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3">Teams</button>' +
-                '<button onclick="deleteEvent(\'' + ev.id + '\')" class="text-red-600 hover:text-red-700 text-xs font-medium">Delete</button>' +
+                '<a href="/events?event_id=' + esc(encodeURIComponent(ev.id)) + '" target="_blank" class="text-blue-600 hover:text-blue-700 text-xs font-medium mr-3">Lihat</a>' +
+                '<button onclick="editEvent(' + esc(JSON.stringify(ev.id)) + ')" class="text-gray-600 hover:text-gray-800 text-xs font-medium mr-3">Ubah</button>' +
+                '<button onclick="openEventDetailModal(' + esc(JSON.stringify(ev.id)) + ')" class="text-gray-600 hover:text-gray-800 text-xs font-medium mr-3">Detail</button>' +
+                '<button onclick="openTeamsModal(' + esc(JSON.stringify(ev.id)) + ')" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium mr-3">Peserta</button>' +
+                '<button onclick="deleteEvent(' + esc(JSON.stringify(ev.id)) + ')" class="text-red-600 hover:text-red-700 text-xs font-medium">Hapus</button>' +
              '</td>' +
           '</tr>';
         }).join('');
@@ -370,7 +332,7 @@
       showId('events-content');
     } catch (e) {
       hideId('loading-state');
-      document.getElementById('error-message').textContent = 'Gagal memuat events: ' + e.message;
+      document.getElementById('error-message').textContent = 'Gagal memuat event: ' + e.message;
       showId('error-state');
     }
   }
@@ -378,11 +340,15 @@
   window.editEvent = function(eventId) {
     isEditMode = true;
     currentEventId = eventId;
-    document.getElementById('event-modal-title').textContent = 'Edit Event';
+    document.getElementById('event-modal-title').textContent = 'Ubah event';
+    document.getElementById('event-form').reset();
+    document.getElementById('event-form').inert = true;
+    document.getElementById('event-form-feedback').textContent = 'Memuat event...';
+    showId('event-form-feedback');
     document.getElementById('event-id').value = eventId;
 
     api('/events/' + eventId).then(function(data) {
-      if (!data || !data.success) return;
+      if (!data || !data.success) throw new Error('Event belum dapat dimuat.');
       const ev = data.data || {};
       document.getElementById('event-name').value = ev.name || '';
       document.getElementById('event-description').value = ev.description || '';
@@ -397,7 +363,10 @@
       else document.getElementById('event-opens-at').value = '';
       if (ev.closes_at) document.getElementById('event-closes-at').value = formatDateTimeLocal(ev.closes_at);
       else document.getElementById('event-closes-at').value = '';
-    });
+      hideId('event-form-feedback');
+    }).catch(function(error) {
+      document.getElementById('event-form-feedback').textContent = error.message;
+    }).finally(function() { document.getElementById('event-form').inert = false; });
 
     showId('event-modal');
   };
@@ -405,8 +374,10 @@
   window.openCreateEventModal = function() {
     isEditMode = false;
     currentEventId = null;
-    document.getElementById('event-modal-title').textContent = 'Create Event';
+    document.getElementById('event-modal-title').textContent = 'Tambah event';
     document.getElementById('event-form').reset();
+    document.getElementById('event-form').inert = false;
+    hideId('event-form-feedback');
     document.getElementById('event-currency').value = 'IDR';
     document.getElementById('event-timezone').value = 'UTC';
     document.getElementById('event-id').value = '';
@@ -436,6 +407,9 @@
     const method = isEditMode ? 'PUT' : 'POST';
     const path = isEditMode ? '/admin/events/' + currentEventId : '/admin/events';
 
+    const submit = e.target.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
     const res = await api(path, {
       method: method,
       body: JSON.stringify(payload),
@@ -445,8 +419,12 @@
       closeEventModal();
       loadEvents();
     } else {
-      alert(res?.message || 'Gagal menyimpan event');
+      throw new Error(res?.message || 'Gagal menyimpan event');
     }
+    } catch (error) {
+      document.getElementById('event-form-feedback').textContent = error.message;
+      showId('event-form-feedback');
+    } finally { submit.disabled = false; }
   });
 
   window.deleteEvent = function(eventId) {
@@ -470,21 +448,6 @@
     }
   };
 
-  window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const isOpen = sidebar.classList.contains('translate-x-0');
-
-    if (isOpen) {
-      sidebar.classList.remove('translate-x-0');
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    } else {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      overlay.classList.remove('hidden');
-    }
-  };
 
   window.openTeamsModal = function(eventId) {
     currentEventId = eventId;
@@ -530,11 +493,11 @@
 
       const statusActions = [];
       if (ev.status === 'DRAFT') {
-        statusActions.push('<button onclick="updateEventStatus(\'' + eventId + '\', \'PUBLISHED\')" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium">Publish</button>');
+        statusActions.push('<button onclick="updateEventStatus(' + esc(JSON.stringify(eventId)) + ', \'PUBLISHED\')" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium">Terbitkan</button>');
       } else if (ev.status === 'VOTING_OPEN') {
-        statusActions.push('<button onclick="updateEventStatus(\'' + eventId + '\', \'VOTING_CLOSED\')" class="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium">Close Voting</button>');
-      } else if (ev.status === 'VOTING_CLOSED') {
-        statusActions.push('<button onclick="updateEventStatus(\'' + eventId + '\', \'VOTING_OPEN\')" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium">Open Voting</button>');
+        statusActions.push('<button onclick="updateEventStatus(' + esc(JSON.stringify(eventId)) + ', \'VOTING_CLOSED\')" class="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-medium">Tutup voting</button>');
+      } else if (ev.status === 'PUBLISHED' || ev.status === 'VOTING_CLOSED') {
+        statusActions.push('<button onclick="updateEventStatus(' + esc(JSON.stringify(eventId)) + ', \'VOTING_OPEN\')" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium">Buka voting</button>');
       }
 
       container.innerHTML = `
@@ -543,54 +506,54 @@
             <div>
               <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Informasi Event</h4>
               <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                <p><span class="text-gray-500">Nama:</span> <span class="font-medium text-gray-800">${ev.name || ''}</span></p>
+                <p><span class="text-gray-500">Nama:</span> <span class="font-medium text-gray-800">${esc(ev.name)}</span></p>
                 <p><span class="text-gray-500">Status:</span> ${getStatusBadge(ev.status)}</p>
-                <p><span class="text-gray-500">Harga per Vote:</span> <span class="font-medium text-gray-800">Rp ${(ev.price_per_vote || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Max Vote per Transaksi:</span> <span class="font-medium text-gray-800">${ev.max_vote_per_transaction || '-'}</span></p>
-                <p><span class="text-gray-500">Mata Uang:</span> <span class="font-medium text-gray-800">${ev.currency || 'IDR'}</span></p>
-                <p><span class="text-gray-500">Timezone:</span> <span class="font-medium text-gray-800">${ev.timezone || 'UTC'}</span></p>
-                ${ev.opens_at ? '<p><span class="text-gray-500">Opens At:</span> <span class="font-medium text-gray-800">' + new Date(ev.opens_at).toLocaleString('id-ID') + '</span></p>' : ''}
-                ${ev.closes_at ? '<p><span class="text-gray-500">Closes At:</span> <span class="font-medium text-gray-800">' + new Date(ev.closes_at).toLocaleString('id-ID') + '</span></p>' : ''}
+                <p><span class="text-gray-500">Harga per suara:</span> <span class="font-medium text-gray-800">Rp ${esc((ev.price_per_vote || 0).toLocaleString('id-ID'))}</span></p>
+                <p><span class="text-gray-500">Batas suara per transaksi:</span> <span class="font-medium text-gray-800">${esc(ev.max_vote_per_transaction || '-')}</span></p>
+                <p><span class="text-gray-500">Mata uang:</span> <span class="font-medium text-gray-800">${esc(ev.currency || 'IDR')}</span></p>
+                <p><span class="text-gray-500">Zona waktu:</span> <span class="font-medium text-gray-800">${esc(ev.timezone || 'UTC')}</span></p>
+                ${ev.opens_at ? '<p><span class="text-gray-500">Dibuka pada:</span> <span class="font-medium text-gray-800">' + new Date(ev.opens_at).toLocaleString('id-ID') + '</span></p>' : ''}
+                ${ev.closes_at ? '<p><span class="text-gray-500">Ditutup pada:</span> <span class="font-medium text-gray-800">' + new Date(ev.closes_at).toLocaleString('id-ID') + '</span></p>' : ''}
               </div>
             </div>
             <div>
               <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">Statistik</h4>
               <div class="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                <p><span class="text-gray-500">Total Tim:</span> <span class="font-medium text-gray-800">${teams.length}</span></p>
-                <p><span class="text-gray-500">Total Vote:</span> <span class="font-medium text-gray-800">${(stats.votes || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Total Transaksi:</span> <span class="font-medium text-gray-800">${(stats.payments || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Transaksi Sukses:</span> <span class="font-medium text-green-600">${(stats.successful_payments || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Transaksi Pending:</span> <span class="font-medium text-amber-600">${(stats.pending_payments || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Transaksi Failed:</span> <span class="font-medium text-red-600">${(stats.failed_payments || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Transaksi Expired:</span> <span class="font-medium text-gray-500">${(stats.expired_payments || 0).toLocaleString('id-ID')}</span></p>
-                <p><span class="text-gray-500">Total Nominal Sukses:</span> <span class="font-medium text-gray-800">Rp ${(stats.total_amount || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Total peserta:</span> <span class="font-medium text-gray-800">${teams.length}</span></p>
+                <p><span class="text-gray-500">Total suara:</span> <span class="font-medium text-gray-800">${(stats.votes || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Total transaksi:</span> <span class="font-medium text-gray-800">${(stats.payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi berhasil:</span> <span class="font-medium text-green-600">${(stats.successful_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi menunggu:</span> <span class="font-medium text-amber-600">${(stats.pending_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi gagal:</span> <span class="font-medium text-red-600">${(stats.failed_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Transaksi kedaluwarsa:</span> <span class="font-medium text-gray-500">${(stats.expired_payments || 0).toLocaleString('id-ID')}</span></p>
+                <p><span class="text-gray-500">Total pembayaran berhasil:</span> <span class="font-medium text-gray-800">Rp ${(stats.total_amount || 0).toLocaleString('id-ID')}</span></p>
               </div>
             </div>
           </div>
           <div>
             <div class="flex items-center justify-between mb-3">
-              <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Ranking Team</h4>
+              <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Peringkat peserta</h4>
               <div class="flex gap-2">${statusActions.join('')}</div>
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
                 <thead>
                   <tr class="text-left text-gray-500 border-b">
-                    <th class="px-4 py-2">Rank</th>
-                    <th class="px-4 py-2">Team</th>
-                    <th class="px-4 py-2">School</th>
-                    <th class="px-4 py-2 text-right">Votes</th>
-                    <th class="px-4 py-2 text-right">Supporters</th>
+                    <th class="px-4 py-2">Peringkat</th>
+                    <th class="px-4 py-2">Peserta</th>
+                    <th class="px-4 py-2">Asal / organisasi</th>
+                    <th class="px-4 py-2 text-right">Suara</th>
+                    <th class="px-4 py-2 text-right">Pendukung</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${teams.map(function(t, idx) {
                     return '<tr class="border-b last:border-0 hover:bg-gray-50">' +
                       '<td class="px-4 py-2 font-bold text-gray-800">#' + (idx + 1) + '</td>' +
-                      '<td class="px-4 py-2 font-medium text-gray-800">' + (t.name || '') + '</td>' +
-                      '<td class="px-4 py-2 text-gray-500">' + (t.school || '') + '</td>' +
-                      '<td class="px-4 py-2 text-right font-semibold text-navy">' + (t.votes || 0).toLocaleString('id-ID') + '</td>' +
-                      '<td class="px-4 py-2 text-right text-gray-500">' + (t.supporter_count || 0).toLocaleString('id-ID') + '</td>' +
+                      '<td class="px-4 py-2 font-medium text-gray-800">' + esc(t.name) + '</td>' +
+                      '<td class="px-4 py-2 text-gray-500">' + esc(t.school) + '</td>' +
+                      '<td class="px-4 py-2 text-right font-semibold text-navy">' + esc((t.votes || 0).toLocaleString('id-ID')) + '</td>' +
+                      '<td class="px-4 py-2 text-right text-gray-500">' + esc((t.supporter_count || 0).toLocaleString('id-ID')) + '</td>' +
                     '</tr>';
                   }).join('')}
                 </tbody>
@@ -600,7 +563,7 @@
         </div>
       `;
     } catch (e) {
-      container.innerHTML = '<p class="text-sm text-red-600">Gagal memuat detail event: ' + e.message + '</p>';
+      container.innerHTML = '<p class="text-sm text-red-600">Gagal memuat detail event: ' + esc(e.message) + '</p>';
     }
   }
 
@@ -625,34 +588,34 @@
 
   async function loadTeams(eventId) {
     const listEl = document.getElementById('teams-list');
-    listEl.innerHTML = '<p class="text-sm text-gray-400">Memuat tim...</p>';
+    listEl.innerHTML = '<p class="text-sm text-gray-400">Memuat peserta...</p>';
 
     try {
       const data = await api('/events/' + eventId + '/teams');
       if (!data || !data.success) {
-        throw new Error(data?.message || 'Gagal memuat tim');
+        throw new Error(data?.message || 'Gagal memuat peserta');
       }
 
       const teams = data.data || [];
       if (!teams.length) {
-        listEl.innerHTML = '<p class="text-sm text-gray-400">Belum ada tim.</p>';
+        listEl.innerHTML = '<p class="text-sm text-gray-400">Belum ada peserta. Tambahkan peserta melalui formulir di atas.</p>';
         return;
       }
 
       listEl.innerHTML = teams.map(function(t) {
         return '<div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">' +
           '<div>' +
-            '<p class="text-sm font-medium text-gray-800">' + (t.name || '') + '</p>' +
-            '<p class="text-xs text-gray-500">' + (t.school || '') + (t.sort_order ? ' · Order ' + t.sort_order : '') + '</p>' +
+            '<p class="text-sm font-medium text-gray-800">' + esc(t.name) + '</p>' +
+            '<p class="text-xs text-gray-500">' + esc(t.school) + (t.sort_order ? ' · Nomor undi ' + esc(t.sort_order) : '') + '</p>' +
           '</div>' +
           '<div class="flex gap-2">' +
-            '<button onclick="editTeam(\'' + eventId + '\', \'' + t.id + '\')" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Edit</button>' +
-            '<button onclick="deleteTeam(\'' + eventId + '\', \'' + t.id + '\')" class="text-xs text-red-600 hover:text-red-800 font-medium">Delete</button>' +
+            '<button onclick="editTeam(' + esc(JSON.stringify(eventId)) + ', ' + esc(JSON.stringify(t.id)) + ')" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Ubah</button>' +
+            '<button onclick="deleteTeam(' + esc(JSON.stringify(eventId)) + ', ' + esc(JSON.stringify(t.id)) + ')" class="text-xs text-red-600 hover:text-red-800 font-medium">Hapus</button>' +
           '</div>' +
         '</div>';
       }).join('');
     } catch (e) {
-      listEl.innerHTML = '<p class="text-sm text-red-600">Gagal memuat tim: ' + e.message + '</p>';
+      listEl.innerHTML = '<p class="text-sm text-red-600">Gagal memuat peserta: ' + esc(e.message) + '</p>';
     }
   }
 
@@ -673,12 +636,12 @@
   };
 
   window.deleteTeam = async function(eventId, teamId) {
-    if (!confirm('Apakah Anda yakin ingin menghapus tim ini?')) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus peserta ini?')) return;
     const res = await api('/admin/events/' + eventId + '/teams/' + teamId, { method: 'DELETE' });
     if (res && res.success) {
       loadTeams(eventId);
     } else {
-      alert(res?.message || 'Gagal menghapus tim');
+      alert(res?.message || 'Gagal menghapus peserta');
     }
   };
 
@@ -717,12 +680,12 @@
         resetTeamForm();
         loadTeams(currentEventId);
       } else {
-        const msg = (res && res.message) ? res.message : 'Gagal menyimpan tim';
+        const msg = (res && res.message) ? res.message : 'Gagal menyimpan peserta';
         errorEl.textContent = msg;
         errorEl.classList.remove('hidden');
       }
     } catch (err) {
-      errorEl.textContent = err.message || 'Gagal menyimpan tim';
+      errorEl.textContent = err.message || 'Gagal menyimpan peserta';
       errorEl.classList.remove('hidden');
     } finally {
       submitBtn.disabled = false;
@@ -730,6 +693,7 @@
     }
   });
 
+  window.loadEvents = loadEvents;
   loadEvents();
 })();
 </script>

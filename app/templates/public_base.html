@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "macros/public.html" import icon %}
+{% block body_class %}public-site font-body antialiased{% endblock %}
+{% block fonts %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;800&family=Cormorant+Garamond:ital,wght@0,500;1,500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/public.css?v={{ tailwind_css_version | default("preview", true) }}">
+{% endblock %}
+{% block navbar %}
+<a class="skip-link" href="#main-content">Lewati ke konten</a>
+<header class="public-header" x-data="{ open: false }">
+  <div class="shell header-inner">
+    <a href="/" class="wordmark" aria-label="Raja Voting Digital — Beranda"><img class="brand-logo" src="/static/images/raja-voting-logo.png?v={{ tailwind_css_version | default("preview", true) }}" width="56" height="56" alt="Logo Raja Voting Digital"><span>raja<span class="brand-light">voting</span><small>DIGITAL VOTING PLATFORM</small></span></a>
+    <nav class="desktop-nav" aria-label="Navigasi utama">
+      <a href="/" {% if request.url.path == '/' %}aria-current="page"{% endif %}>Beranda</a>
+      <a href="/events" {% if request.url.path.startswith('/events') %}aria-current="page"{% endif %}>Jelajahi Event</a>
+      <a href="/leaderboard" {% if request.url.path == '/leaderboard' %}aria-current="page"{% endif %}>Leaderboard</a>
+    </nav>
+    <a href="/events" class="button button-dark header-cta">Mulai Voting {{ icon('arrow') }}</a>
+    <button class="menu-toggle" @click="open = !open" :aria-expanded="open" aria-controls="mobile-nav" aria-label="Buka navigasi"><span x-text="open ? 'Tutup' : 'Menu'"></span></button>
+  </div>
+  <nav id="mobile-nav" class="mobile-nav shell" x-show="open" x-cloak aria-label="Navigasi ponsel"><a href="/">Beranda</a><a href="/events">Jelajahi Event</a><a href="/leaderboard">Leaderboard</a></nav>
+</header>
+<div id="main-content" tabindex="-1"></div>
+{% endblock %}
+{% block footer %}
+<footer class="public-footer"><div class="shell footer-grid">
+  <div><a class="wordmark" href="/"><img class="brand-logo" src="/static/images/raja-voting-logo.png?v={{ tailwind_css_version | default("preview", true) }}" width="56" height="56" alt="Logo Raja Voting Digital"><span>raja<span class="brand-light">voting</span><small>DIGITAL VOTING PLATFORM</small></span></a><p>Panggung untuk setiap talenta.<br>Ruang untuk setiap dukungan.</p></div>
+  <div><span class="eyebrow">TEMUKAN</span><a href="/events">Jelajahi Event</a><a href="/leaderboard">Leaderboard</a><a href="/#cara-voting">Cara Voting</a></div>
+  <div><span class="eyebrow">SETIAP SUARA BERARTI</span><p>Pilih peserta. Berikan dukungan.<br>Ikuti perjalanan mereka menuju puncak.</p></div>
+</div><div class="shell footer-bottom"><span>© 2026 Raja Voting Digital.</span><span>Dibuat untuk merayakan potensi.</span><a href="/admin/login">Portal Admin ↗</a></div></footer>
+{% endblock %}

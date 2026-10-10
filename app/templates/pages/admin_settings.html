@@ -1,252 +1,89 @@
-{% extends "base.html" %}
-{% block title %}Settings - Web Voting Championship{% endblock %}
-
-{% block content %}
-<div class="flex h-screen overflow-hidden bg-gray-100">
-
-  <!-- SIDEBAR -->
-  <aside id="sidebar"
-    class="fixed md:static z-50 w-64 bg-slate-900 text-white p-6 space-y-6 h-full transform -translate-x-full md:translate-x-0 transition duration-300">
-
-    <h2 class="text-2xl font-bold tracking-tight">VOTEPRO</h2>
-
-    <nav class="space-y-1 text-sm">
-      <a href="/admin" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Dashboard</a>
-      <a href="/admin/events" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Events</a>
-      <a href="/admin/transactions" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Transactions</a>
-      <a href="/admin/audit-logs" class="menu-item block px-3 py-2 rounded-lg text-gray-300 hover:bg-slate-800 hover:text-white transition duration-200">Audit Logs</a>
-      <a href="/admin/settings" class="menu-item block px-3 py-2 rounded-lg bg-slate-800 text-white transition duration-200">Settings</a>
-    </nav>
-
-  </aside>
-
-  <!-- OVERLAY -->
-  <div id="overlay"
-    onclick="toggleSidebar()"
-    class="fixed inset-0 bg-black/30 hidden md:hidden">
-  </div>
-
-  <!-- MAIN -->
-  <div class="flex-1 flex flex-col min-w-0">
-
-    <!-- TOPBAR -->
-    <header class="bg-white px-6 py-4 flex justify-between items-center shadow-sm">
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-xl">Menu</button>
-        <h1 class="text-lg font-semibold text-gray-800">Settings</h1>
+{% extends "admin_base.html" %}
+{% set admin_title = 'Pengaturan' %}
+{% set admin_description = 'Kelola informasi administrasi situs dan periksa konfigurasi yang tersimpan.' %}
+{% block title %}Pengaturan | Raja Voting Digital{% endblock %}
+{% block admin_content %}
+<div id="loading-state" class="rv-state" role="status">Memuat pengaturan...</div>
+<div id="error-state" class="notice notice-error hidden" role="alert"><p id="error-message"></p><button type="button" class="btn btn-secondary" onclick="loadSettings()">Coba lagi</button></div>
+<div id="settings-content" class="hidden space-y-6">
+  <section class="admin-settings-section">
+    <div class="admin-settings-heading">
+    <h2 class="rv-section-title">Informasi situs</h2>
+    <p>Nama situs dan kontak panitia yang disimpan untuk administrasi event.</p>
+    </div>
+    <form id="settings-form" class="space-y-4">
+      <div class="field"><label for="setting-site-name">Nama situs</label><input id="setting-site-name" maxlength="200" required></div>
+      <div class="field"><label for="setting-admin-email">Email panitia</label><input id="setting-admin-email" type="email" autocomplete="email"></div>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="field"><label for="setting-timezone">Zona waktu</label><input id="setting-timezone" placeholder="Asia/Jakarta" required></div>
+        <div class="field"><label for="setting-currency">Mata uang</label><input id="setting-currency" maxlength="3" pattern="[A-Z]{3}" placeholder="IDR" required></div>
       </div>
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
-        <span class="text-sm font-medium text-gray-700">Admin</span>
+      <p id="general-feedback" role="status" class="admin-feedback hidden"></p>
+      <button class="btn btn-primary" type="submit">Simpan informasi</button>
+    </form>
+  </section>
+  <section class="admin-settings-section">
+    <div class="admin-settings-heading">
+    <h2 class="rv-section-title">Konfigurasi tersimpan</h2>
+    <p>Nilai di bagian ini tersimpan sebagai catatan. Mode pemeliharaan, Cloudflare, antrean, dan interval pembaruan belum mengubah perilaku aplikasi.</p>
+    </div>
+    <form id="system-settings-form" class="space-y-4">
+      <label class="flex items-center gap-3"><input type="checkbox" id="setting-maintenance"> Catatan mode pemeliharaan</label>
+      <label class="flex items-center gap-3"><input type="checkbox" id="setting-cloudflare"> Catatan proteksi Cloudflare</label>
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div class="field"><label for="setting-queue-limit">Batas antrean</label><input id="setting-queue-limit" type="number" min="0" step="1" required></div>
+        <div class="field"><label for="setting-leaderboard-refresh">Interval peringkat (detik)</label><input id="setting-leaderboard-refresh" type="number" min="1" step="1" required></div>
       </div>
-    </header>
-
-    <!-- CONTENT -->
-    <main class="p-6 space-y-6 overflow-y-auto">
-
-      <!-- LOADING STATE -->
-      <div id="loading-state" class="flex items-center justify-center min-h-[50vh]">
-        <p class="text-gray-400 text-sm">Memuat settings...</p>
-      </div>
-
-      <!-- SETTINGS CONTENT (hidden until loaded) -->
-      <div id="settings-content" class="hidden space-y-6">
-
-        <!-- GENERAL SETTINGS -->
-        <div class="bg-white rounded-xl shadow-sm p-6">
-          <h2 class="text-lg font-semibold text-gray-800 mb-4">General Settings</h2>
-          <form id="settings-form" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Site Name</label>
-              <input type="text" id="setting-site-name" value="Web Voting Championship" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Admin Email</label>
-              <input type="email" id="setting-admin-email" value="admin@panitia.id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
-              <input type="text" id="setting-timezone" value="Asia/Jakarta" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-              <input type="text" id="setting-currency" value="IDR" maxlength="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm uppercase">
-            </div>
-            <div class="flex justify-end">
-              <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-                Save Changes
-              </button>
-            </div>
-          </form>
-        </div>
-
-        <!-- SYSTEM SETTINGS -->
-        <div class="bg-white rounded-xl shadow-sm p-6">
-          <h2 class="text-lg font-semibold text-gray-800 mb-4">System Settings</h2>
-          <div class="space-y-4">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-800">Maintenance Mode</p>
-                <p class="text-xs text-gray-500">Nonaktifkan akses publik sementara</p>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="setting-maintenance" class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-            </div>
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-gray-800">Cloudflare Protection</p>
-                <p class="text-xs text-gray-500">Aktifkan proteksi Cloudflare</p>
-              </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" id="setting-cloudflare" class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-              </label>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Queue Limit</label>
-              <input type="number" id="setting-queue-limit" value="500" min="0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Leaderboard Refresh (detik)</label>
-              <input type="number" id="setting-leaderboard-refresh" value="10" min="1" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
-            </div>
-            <div class="flex justify-end">
-              <button onclick="saveSystemSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-                Save System Settings
-              </button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-    </main>
-
-  </div>
+      <p id="system-feedback" role="status" class="admin-feedback hidden"></p>
+      <button class="btn btn-primary" type="submit">Simpan konfigurasi</button>
+    </form>
+  </section>
 </div>
 {% endblock %}
-
 {% block scripts %}
 <script>
-(function() {
-  const API_BASE = '/api/v1';
-
-  function showId(el) {
-    const e = document.getElementById(el);
-    if (e) e.classList.remove('hidden');
-  }
-
-  function hideId(el) {
-    const e = document.getElementById(el);
-    if (e) e.classList.add('hidden');
-  }
-
+(() => {
+  const general = {site_name:'setting-site-name', admin_email:'setting-admin-email', timezone:'setting-timezone', currency:'setting-currency'};
+  const system = {maintenance_mode:'setting-maintenance', cloudflare_enabled:'setting-cloudflare', queue_limit:'setting-queue-limit', leaderboard_refresh:'setting-leaderboard-refresh'};
   async function api(path, options = {}) {
-    const token = localStorage.getItem('wvc_admin_token') || '';
-    const headers = Object.assign({
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + token,
-    }, options.headers || {});
-
-    const res = await fetch(API_BASE + path, Object.assign({ headers }, options));
-    if (res.status === 401) {
-      localStorage.removeItem('wvc_admin_token');
-      window.location.href = '/admin/login';
-      return null;
-    }
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return res.json().catch(() => ({}));
+    const response = await fetch('/api/v1/admin/settings' + path, {...options, headers:{'Content-Type':'application/json', Authorization:'Bearer ' + (localStorage.getItem('wvc_admin_token') || '')}});
+    if (response.status === 401 || response.status === 403) { localStorage.removeItem('wvc_admin_token'); location.assign('/admin/login'); throw new Error('Silakan masuk kembali.'); }
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || 'Pengaturan belum dapat disimpan.');
+    return data.data;
   }
-
-  async function loadSettings() {
-    hideId('error-state');
-    showId('loading-state');
-    hideId('settings-content');
-
+  window.loadSettings = async () => {
+    document.getElementById('error-state').classList.add('hidden');
+    document.getElementById('loading-state').classList.remove('hidden');
     try {
-      const data = await api('/admin/settings');
-      if (!data || !data.success) {
-        throw new Error(data?.message || 'Gagal memuat settings');
-      }
-
-      const settings = data.data || {};
-      if (settings.site_name) document.getElementById('setting-site-name').value = settings.site_name;
-      if (settings.admin_email) document.getElementById('setting-admin-email').value = settings.admin_email;
-      if (settings.timezone) document.getElementById('setting-timezone').value = settings.timezone;
-      if (settings.currency) document.getElementById('setting-currency').value = settings.currency;
-      if (settings.maintenance_mode !== undefined) document.getElementById('setting-maintenance').checked = settings.maintenance_mode === 'true';
-      if (settings.cloudflare_enabled !== undefined) document.getElementById('setting-cloudflare').checked = settings.cloudflare_enabled === 'true';
-      if (settings.queue_limit) document.getElementById('setting-queue-limit').value = settings.queue_limit;
-      if (settings.leaderboard_refresh) document.getElementById('setting-leaderboard-refresh').value = settings.leaderboard_refresh;
-
-      hideId('loading-state');
-      showId('settings-content');
-    } catch (e) {
-      hideId('loading-state');
-      document.getElementById('error-message').textContent = 'Gagal memuat settings: ' + e.message;
-      showId('error-state');
-    }
+      const data = await api('');
+      Object.entries({...general,...system}).forEach(([key,id]) => {
+        const input = document.getElementById(id);
+        if (input.type === 'checkbox') input.checked = data[key] === 'true';
+        else input.value = data[key] || '';
+      });
+      document.getElementById('settings-content').classList.remove('hidden');
+    } catch (error) {
+      document.getElementById('error-message').textContent = error.message;
+      document.getElementById('error-state').classList.remove('hidden');
+    } finally { document.getElementById('loading-state').classList.add('hidden'); }
+  };
+  for (const [formId,fields,path,feedbackId] of [['settings-form',general,'','general-feedback'],['system-settings-form',system,'/system','system-feedback']]) {
+    document.getElementById(formId).addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.target.querySelector('button[type=submit]');
+      const feedback = document.getElementById(feedbackId);
+      const payload = {};
+      Object.entries(fields).forEach(([key,id]) => { const input = document.getElementById(id); payload[key] = input.type === 'checkbox' ? String(input.checked) : input.value.trim(); });
+      button.disabled = true;
+      feedback.textContent = 'Menyimpan...';
+      feedback.classList.remove('hidden');
+      feedback.dataset.error = 'false';
+      try { await api(path,{method:'PUT',body:JSON.stringify(payload)}); feedback.textContent = 'Perubahan tersimpan.'; }
+      catch (error) { feedback.textContent = error.message; feedback.dataset.error = 'true'; }
+      finally { button.disabled = false; }
+    });
   }
-
-  document.getElementById('settings-form').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const payload = {
-      site_name: document.getElementById('setting-site-name').value,
-      admin_email: document.getElementById('setting-admin-email').value,
-      timezone: document.getElementById('setting-timezone').value,
-      currency: document.getElementById('setting-currency').value,
-    };
-
-    const res = await api('/admin/settings', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-
-    if (res && res.success) {
-      alert('Settings saved successfully');
-    } else {
-      alert(res?.message || 'Gagal menyimpan settings');
-    }
-  });
-
-  window.saveSystemSettings = async function() {
-    const payload = {
-      maintenance_mode: document.getElementById('setting-maintenance').checked ? 'true' : 'false',
-      cloudflare_enabled: document.getElementById('setting-cloudflare').checked ? 'true' : 'false',
-      queue_limit: document.getElementById('setting-queue-limit').value,
-      leaderboard_refresh: document.getElementById('setting-leaderboard-refresh').value,
-    };
-
-    const res = await api('/admin/settings/system', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-
-    if (res && res.success) {
-      alert('System settings saved successfully');
-    } else {
-      alert(res?.message || 'Gagal menyimpan system settings');
-    }
-  };
-
-  window.toggleSidebar = function() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    const isOpen = sidebar.classList.contains('translate-x-0');
-
-    if (isOpen) {
-      sidebar.classList.remove('translate-x-0');
-      sidebar.classList.add('-translate-x-full');
-      overlay.classList.add('hidden');
-    } else {
-      sidebar.classList.remove('-translate-x-full');
-      sidebar.classList.add('translate-x-0');
-      overlay.classList.remove('hidden');
-    }
-  };
-
   loadSettings();
 })();
 </script>
