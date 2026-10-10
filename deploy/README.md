@@ -6,9 +6,9 @@ Production runs at https://rajavotedigital.my.id. The current release combines t
 
 | Component | Configuration |
 | --- | --- |
-| Release | `/srv/rvd/current` → `/srv/rvd/releases/20261010-ivory-gold` |
+| Release | `/srv/rvd/current` → a validated `/srv/rvd/releases/git-<commit>` release |
 | Service | `rvd.service`, dedicated `rvd` user, two uvicorn workers on loopback port 8000 |
-| Python | 3.12, `/srv/rvd/venv`, dependencies from hash-verified `requirements.lock` |
+| Python | 3.12, release-local `.venv`, dependencies from hash-verified `requirements.lock` |
 | Database | PostgreSQL 16, loopback only, separate production and disposable test databases |
 | Redis | Shared cache, rate limits and SSE backplane; separate test database |
 | Environment | `/etc/rvd/production.env`, outside source control |

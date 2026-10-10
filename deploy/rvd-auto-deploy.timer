@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Raja Voting Digital main for a new release
+
+[Timer]
+OnBootSec=60
+OnUnitInactiveSec=60
+AccuracySec=5
+Unit=rvd-auto-deploy.service
+
+[Install]
+WantedBy=timers.target

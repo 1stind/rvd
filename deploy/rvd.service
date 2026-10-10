@@ -9,7 +9,7 @@ Group=rvd
 WorkingDirectory=/srv/rvd/current
 EnvironmentFile=/etc/rvd/production.env
 Environment=PYTHONDONTWRITEBYTECODE=1
-ExecStart=/srv/rvd/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --loop uvloop --http httptools --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log --timeout-graceful-shutdown 15
+ExecStart=/srv/rvd/current/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --loop uvloop --http httptools --proxy-headers --forwarded-allow-ips 127.0.0.1 --no-access-log --timeout-graceful-shutdown 15
 Restart=always
 RestartSec=3
 LimitNOFILE=65536
